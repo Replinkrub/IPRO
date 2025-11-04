@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPRO - Inteligência de Pedidos PRO</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment-timezone@0.5.34/builds/moment-timezone-with-data.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <!-- Header -->
+    <header class="bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-chart-line text-2xl"></i>
+                    <h1 class="text-2xl font-bold">IPRO</h1>
+                    <span class="text-blue-200">Inteligência de Pedidos PRO</span>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="uploadBtn" class="bg-blue-500 hover:bg-blue-700 px-4 py-2 rounded-lg flex items-center space-x-2">
+                        <i class="fas fa-upload"></i>
+                        <span>Upload</span>
+                    </button>
+                    <button id="exportBtn" class="bg-green-500 hover:bg-green-700 px-4 py-2 rounded-lg flex items-center space-x-2" disabled>
+                        <i class="fas fa-download"></i>
+                        <span>Exportar</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="container mx-auto px-4">
+            <div class="flex space-x-8">
+                <button class="tab-btn active py-4 px-2 border-b-2 border-blue-500 text-blue-600 font-medium" data-tab="dashboard">
+                    <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+                </button>
+                <button class="tab-btn py-4 px-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700" data-tab="identificacao">
+                    <i class="fas fa-users mr-2"></i>Identificação do Cliente
+                </button>
+                <button class="tab-btn py-4 px-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700" data-tab="historico">
+                    <i class="fas fa-history mr-2"></i>Histórico Comercial
+                </button>
+                <button class="tab-btn py-4 px-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700" data-tab="mix">
+                    <i class="fas fa-boxes mr-2"></i>Inteligência de Mix
+                </button>
+                <button class="tab-btn py-4 px-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700" data-tab="rico">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>R.I.C.O.
+                </button>
+                <button class="tab-btn py-4 px-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700" data-tab="comportamental">
+                    <i class="fas fa-brain mr-2"></i>Inteligência Comportamental
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <!-- Loading State -->
+        <div id="loading" class="hidden text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p class="mt-4 text-gray-600">Processando dados...</p>
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-12">
+            <i class="fas fa-upload text-6xl text-gray-300 mb-4"></i>
+            <h2 class="text-2xl font-bold text-gray-700 mb-2">Bem-vindo ao IPRO</h2>
+            <p class="text-gray-600 mb-6">Faça upload dos seus arquivos Excel para começar a análise</p>
+            <button onclick="document.getElementById('uploadBtn').click()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg">
+                <i class="fas fa-upload mr-2"></i>Fazer Upload
+            </button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-blue-100 rounded-lg">
+                            <i class="fas fa-users text-blue-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Total de Clientes</p>
+                            <p id="totalClients" class="text-2xl font-bold text-gray-900">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-green-100 rounded-lg">
+                            <i class="fas fa-clock text-green-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Recência Média</p>
+                            <p id="avgRecency" class="text-2xl font-bold text-gray-900">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-yellow-100 rounded-lg">
+                            <i class="fas fa-shopping-cart text-yellow-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Frequência Média</p>
+                            <p id="avgFrequency" class="text-2xl font-bold text-gray-900">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex items-center">
+                        <div class="p-2 bg-purple-100 rounded-lg">
+                            <i class="fas fa-dollar-sign text-purple-600"></i>
+                        </div>
+                        <div class="ml-4">
+                            <p class="text-sm font-medium text-gray-600">Ticket Médio</p>
+                            <p id="avgTicket" class="text-2xl font-bold text-gray-900">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-bold mb-4">Top Produtos por Receita</h3>
+                    <canvas id="topProductsChart"></canvas>
+                </div>
+                <div class="bg-white rounded-lg shadow p-6">
+                    <h3 class="text-lg font-bold mb-4">Segmentação de Clientes</h3>
+                    <canvas id="segmentationChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Identificação do Cliente Tab -->
+        <div id="identificacao" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b">
+                    <h2 class="text-xl font-bold">Identificação do Cliente</h2>
+                    <p class="text-gray-600">Cadastro e metadados dos clientes</p>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4">
+                        <input type="text" id="clientSearch" placeholder="Buscar cliente..." 
+                               class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Segmento</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cidade</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">UF</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tier</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clientsTable" class="bg-white divide-y divide-gray-200">
+                                <!-- Dados serão inseridos aqui -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Histórico Comercial Tab -->
+        <div id="historico" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b">
+                    <h2 class="text-xl font-bold">Histórico Comercial</h2>
+                    <p class="text-gray-600">Evolução de pedidos, ticket e frequência</p>
+                </div>
+                <div class="p-6">
+                    <canvas id="salesEvolutionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inteligência de Mix Tab -->
+        <div id="mix" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b">
+                    <h2 class="text-xl font-bold">Inteligência de Mix</h2>
+                    <p class="text-gray-600">Cobertura de SKUs, curva ABC, produtos heróis</p>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-lg font-bold mb-4">Curva ABC de Produtos</h3>
+                            <canvas id="abcCurveChart"></canvas>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-4">Top Produtos</h3>
+                            <div id="topProductsList" class="space-y-2">
+                                <!-- Lista será inserida aqui -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- R.I.C.O. Tab -->
+        <div id="rico" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b">
+                    <h2 class="text-xl font-bold">Alertas R.I.C.O.</h2>
+                    <p class="text-gray-600">Ruptura, Inatividade, Crescimento, Oportunidade</p>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4 flex space-x-4">
+                        <select id="alertTypeFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">Todos os tipos</option>
+                            <option value="ruptura">Ruptura</option>
+                            <option value="inatividade">Inatividade</option>
+                            <option value="crescimento">Crescimento</option>
+                            <option value="oportunidade">Oportunidade</option>
+                        </select>
+                        <select id="reliabilityFilter" class="px-4 py-2 border rounded-lg">
+                            <option value="">Todas as confiabilidades</option>
+                            <option value="🔵">Alta (🔵)</option>
+                            <option value="🟡">Média (🟡)</option>
+                            <option value="🔴">Baixa (🔴)</option>
+                        </select>
+                    </div>
+                    <div id="alertsList" class="space-y-4">
+                        <!-- Alertas serão inseridos aqui -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inteligência Comportamental Tab -->
+        <div id="comportamental" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow">
+                <div class="p-6 border-b">
+                    <h2 class="text-xl font-bold">Inteligência Comportamental</h2>
+                    <p class="text-gray-600">Cohorts, engajamento, padrões de recompra</p>
+                </div>
+                <div class="p-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div>
+                            <h3 class="text-lg font-bold mb-4">Distribuição RFM</h3>
+                            <canvas id="rfmChart"></canvas>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-4">Padrões de Compra</h3>
+                            <canvas id="purchasePatternsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Upload Modal -->
+    <div id="uploadModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+                <div class="p-6">
+                    <h3 class="text-lg font-bold mb-4">Upload de Arquivos</h3>
+                    <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
+                        <p class="text-gray-600 mb-4">Selecione os arquivos Excel (.xlsx)</p>
+                        <input type="file" id="fileInput" multiple accept=".xlsx" class="hidden">
+                        <button onclick="document.getElementById('fileInput').click()" 
+                                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                            Selecionar Arquivos
+                        </button>
+                    </div>
+                    <div id="fileList" class="mt-4 space-y-2">
+                        <!-- Lista de arquivos será inserida aqui -->
+                    </div>
+                    <div class="flex justify-end space-x-4 mt-6">
+                        <button id="cancelUpload" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancelar</button>
+                        <button id="confirmUpload" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg" disabled>
+                            Upload
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/app-config.js"></script>
+    <script>
+        // Configuração global
+        let currentDatasetId = null;
+        let currentData = null;
+
+        // Configuração do Axios
+        if (window.IPRO_CONFIG) {
+            axios.defaults.baseURL = window.IPRO_CONFIG.baseUrl;
+            axios.defaults.headers.common['X-API-Key'] = window.IPRO_CONFIG.apiKey;
+        }
+
+        // Funções auxiliares para KPIs
+        function setText(id, v) { 
+            const el = document.getElementById(id); 
+            if(el) el.textContent = v; 
+        }
+        
+        function moneyBR(v) { 
+            try { 
+                return v.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}); 
+            } catch(_) { 
+                return 'R$ ' + Number(v||0).toFixed(2); 
+            } 
+        }
+
+        function computeKpisFromResponse(data) {
+            const arr = data?.customer_analytics || data?.customer_metrics || [];
+            const total = arr.length;
+            const num = v => Number.isFinite(+v) ? +v : 0;
+
+            const rec = total ? Math.round(arr.reduce((a,r)=>a+num(r.recency ?? r.R_recency_days ?? r.R_days),0)/total) : 0;
+            const fqs = total ? arr.reduce((a,r)=>a+num(r.order_count ?? r.orders ?? r.F_count ?? r.freq ?? r.frequency),0)/total : 0;
+
+            let avgM = 0;
+            const ticks = arr.map(r => num(r.avg_ticket ?? r.ticket_medio)).filter(Boolean);
+            if (ticks.length) avgM = ticks.reduce((a,b)=>a+b,0)/ticks.length;
+            else {
+                const mon = arr.reduce((a,r)=>a+num(r.monetary ?? r.total_value),0);
+                const ord = arr.reduce((a,r)=>a+num(r.order_count ?? r.orders ?? 0),0);
+                avgM = ord ? mon / ord : 0;
+            }
+            return { total, avgR: rec, avgF: fqs, avgM };
+        }
+
+        function updateTopCards(k) {
+            setText('totalClients', k?.total ?? 0);
+            setText('avgRecency', `${k?.avgR ?? 0} dias`);
+            setText('avgFrequency', (k?.avgF ?? 0).toFixed(1));
+            setText('avgTicket', moneyBR(k?.avgM ?? 0));
+        }
+
+        // Gerenciamento de abas
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tabId = btn.dataset.tab;
+                switchTab(tabId);
+            });
+        });
+
+        function switchTab(tabId) {
+            // Atualizar botões
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
+                btn.classList.add('border-transparent', 'text-gray-500');
+            });
+            
+            document.querySelector(`[data-tab="${tabId}"]`).classList.add('active', 'border-blue-500', 'text-blue-600');
+            document.querySelector(`[data-tab="${tabId}"]`).classList.remove('border-transparent', 'text-gray-500');
+
+            // Atualizar conteúdo
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            document.getElementById(tabId).classList.remove('hidden');
+
+            // Carregar dados específicos da aba
+            if (currentDatasetId) {
+                loadTabData(tabId);
+            }
+        }
+
+        // Upload de arquivos
+        document.getElementById('uploadBtn').addEventListener('click', () => {
+            document.getElementById('uploadModal').classList.remove('hidden');
+        });
+
+        document.getElementById('cancelUpload').addEventListener('click', () => {
+            document.getElementById('uploadModal').classList.add('hidden');
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileList').innerHTML = '';
+            document.getElementById('confirmUpload').disabled = true;
+        });
+
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+
+            files.forEach(file => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'flex items-center justify-between p-2 bg-gray-50 rounded';
+                fileItem.innerHTML = `
+                    <span class="text-sm">${file.name}</span>
+                    <span class="text-xs text-gray-500">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                `;
+                fileList.appendChild(fileItem);
+            });
+
+            document.getElementById('confirmUpload').disabled = files.length === 0;
+        });
+
+        document.getElementById('confirmUpload').addEventListener('click', async () => {
+            const files = document.getElementById('fileInput').files;
+            if (files.length === 0) return;
+
+            const formData = new FormData();
+            Array.from(files).forEach(file => {
+                formData.append('files', file);
+            });
+
+            try {
+                showLoading(true);
+                document.getElementById('uploadModal').classList.add('hidden');
+
+                const response = await axios.post('/api/upload-batch', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+
+                currentDatasetId = response.data.dataset_id;
+                document.getElementById('exportBtn').disabled = false;
+
+                // Carregar dados iniciais
+                await loadDashboardData();
+                
+                // Mostrar dashboard
+                document.getElementById('emptyState').classList.add('hidden');
+                switchTab('dashboard');
+
+            } catch (error) {
+                console.error('Erro no upload:', error);
+                alert('Erro no upload dos arquivos. Tente novamente.');
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // Exportar Excel
+        document.getElementById('exportBtn').addEventListener('click', async () => {
+            if (!currentDatasetId) return;
+
+            try {
+                const response = await axios.get(`/api/export/${currentDatasetId}/excel`, {
+                    responseType: 'blob'
+                });
+
+                const url = window.URL.createObjectURL(new Blob([response.data]));
+                const link = document.createElement('a');
+                link.href = url;
+                link.setAttribute('download', `IPRO_Export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+
+            } catch (error) {
+                console.error('Erro na exportação:', error);
+                alert('Erro na exportação. Tente novamente.');
+            }
+        });
+
+        // Funções de carregamento de dados
+        async function loadDashboardData() {
+            try {
+                const response = await axios.post(`/api/analyze-customers/${currentDatasetId}`);
+                const kpis = response.data?.kpis || computeKpisFromResponse(response.data);
+                updateTopCards(kpis);
+
+                // Carregar gráficos
+                await loadTopProductsChart();
+                await loadSegmentationChart();
+
+            } catch (error) {
+                console.error('Erro ao carregar dashboard:', error);
+            }
+        }
+
+        async function loadTabData(tabId) {
+            switch (tabId) {
+                case 'identificacao':
+                    await loadCustomersData();
+                    break;
+                case 'rico':
+                    await loadAlertsData();
+                    break;
+                // Adicionar outros casos conforme necessário
+            }
+        }
+
+        async function loadCustomersData() {
+            try {
+                const response = await axios.post(`/api/analyze-customers/${currentDatasetId}`);
+                const customers = response.data.customer_analytics;
+                const kpis = response.data?.kpis || computeKpisFromResponse(response.data);
+                updateTopCards(kpis);
+
+                const tbody = document.getElementById('clientsTable');
+                tbody.innerHTML = '';
+
+                customers.forEach(customer => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${customer.client}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.segment || "-"}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.city || "-"}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.uf || "-"}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${customer.tier || "-"}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+
+            } catch (error) {
+                console.error('Erro ao carregar clientes:', error);
+            }
+        }
+
+        async function loadAlertsData() {
+            try {
+                const response = await axios.post(`/api/alerts/rico/${currentDatasetId}`);
+                const alerts = response.data;
+
+                const alertsList = document.getElementById('alertsList');
+                alertsList.innerHTML = '';
+
+                alerts.forEach(alert => {
+                    const alertItem = document.createElement('div');
+                    alertItem.className = 'border rounded-lg p-4';
+                    
+                    const reliabilityColor = alert.reliability === '🔵' ? 'bg-blue-100 text-blue-800' :
+                                           alert.reliability === '🟡' ? 'bg-yellow-100 text-yellow-800' :
+                                           'bg-red-100 text-red-800';
+
+                    alertItem.innerHTML = `
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <span class="px-2 py-1 text-xs font-medium rounded ${reliabilityColor}">
+                                        ${alert.type.toUpperCase()}
+                                    </span>
+                                    <span class="text-sm text-gray-500">${alert.client}</span>
+                                </div>
+                                <p class="text-sm text-gray-700 mb-2">${alert.diagnosis}</p>
+                                <p class="text-sm font-medium text-gray-900">${alert.recommended_action}</p>
+                            </div>
+                            <div class="ml-4 text-right">
+                                <div class="text-2xl">${alert.reliability}</div>
+                                ${alert.suggested_deadline ? `<div class="text-xs text-gray-500">${alert.suggested_deadline}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                    alertsList.appendChild(alertItem);
+                });
+
+            } catch (error) {
+                console.error('Erro ao carregar alertas:', error);
+            }
+        }
+
+        async function loadTopProductsChart() {
+            try {
+                const response = await axios.get(`/api/products/${currentDatasetId}/top?by=receita`);
+                const products = response.data.slice(0, 10);
+
+                const ctx = document.getElementById('topProductsChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: products.map(p => p.product?.substring(0, 20) + '...' || p.sku),
+                        datasets: [{
+                            label: 'Receita (R$)',
+                            data: products.map(p => p.revenue),
+                            backgroundColor: 'rgba(59, 130, 246, 0.8)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    callback: function(value) {
+                                        return 'R$ ' + value.toLocaleString('pt-BR');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Erro ao carregar gráfico de produtos:', error);
+            }
+        }
+
+        async function loadSegmentationChart() {
+            try {
+                const response = await axios.get(`/api/customers/${currentDatasetId}/segments`);
+                const segments = response.data;
+
+                const ctx = document.getElementById('segmentationChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(segments),
+                        datasets: [{
+                            data: Object.values(segments).map(s => s.total_clients),
+                            backgroundColor: [
+                                'rgba(59, 130, 246, 0.8)',
+                                'rgba(16, 185, 129, 0.8)',
+                                'rgba(245, 158, 11, 0.8)',
+                                'rgba(239, 68, 68, 0.8)',
+                                'rgba(139, 92, 246, 0.8)'
+                            ]
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom'
+                            }
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error('Erro ao carregar gráfico de segmentação:', error);
+            }
+        }
+
+        function showLoading(show) {
+            const loading = document.getElementById('loading');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (show) {
+                loading.classList.remove('hidden');
+                emptyState.classList.add('hidden');
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.add('hidden');
+                });
+            } else {
+                loading.classList.add('hidden');
+                if (!currentDatasetId) {
+                    emptyState.classList.remove('hidden');
+                }
+            }
+        }
+
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!currentDatasetId) {
+                document.getElementById('emptyState').classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>

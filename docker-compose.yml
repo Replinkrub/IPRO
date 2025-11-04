@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: ipro-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+      MONGO_INITDB_DATABASE: ipro
+    volumes:
+      - mongodb_data:/data/db
+      - ./init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+    networks:
+      - ipro-network
+
+  ipro-app:
+    build: .
+    container_name: ipro-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_URI=mongodb://ipro_user:ipro_pass@mongodb:27017/ipro?authSource=ipro
+      - MONGO_DB=ipro
+      - JWT_SECRET=your-super-secret-jwt-key-change-in-production
+      - IPRO_API_KEY=your-api-key-here
+      - ALLOWED_ORIGINS=http://localhost:5000,http://127.0.0.1:5000
+      - TIMEZONE=America/Sao_Paulo
+      - MAX_INSERT_BATCH=5000
+      - CHUNK_ROWS=50000
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - mongodb
+    networks:
+      - ipro-network
+
+volumes:
+  mongodb_data:
+
+networks:
+  ipro-network:
+    driver: bridge
+
