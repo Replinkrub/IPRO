@@ -165,3 +165,177 @@ Copy-Item .env.example .env
 # 4) (Opcional) rode a API se existir um app FastAPI
 # ajuste o módulo conforme o projeto (ex.: ipro.api:app ou ipro.main:app)
 uvicorn ipro.api:app --reload --host 0.0.0.0 --port 8000
+7. Variáveis de ambiente (.env)
+
+Um .env.example está no repositório. Copie para .env e edite os valores.
+
+APP_NAME=ipro
+ENVIRONMENT=development   # development|staging|production
+DEBUG=false
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=INFO
+
+# Banco / cache (opcionais conforme sua stack)
+MONGO_URI=mongodb+srv://<user>:<pass>@<cluster>/<db>?retryWrites=true&w=majority
+MONGO_DB=ipro
+REDIS_URL=redis://localhost:6379/0
+
+# Segurança
+SECRET_KEY=<generate_a_long_random_secret>
+JWT_SECRET=<generate_a_long_random_secret>
+JWT_EXPIRE_MINUTES=60
+
+# CORS
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+
+# Fuso
+TZ=America/Recife
+
+
+Nunca commitar .env. Use apenas o .env.example no Git.
+
+8. Motor de normalização (Base do IPRO)
+8.1. Extração do código da SKU
+
+O código da SKU é o número que precede o hífen no campo Produto.
+
+Padrões válidos reconhecidos:
+
+NN.NN.NNN.NNNN (ex.: 20.07.001.0001)
+
+NN.NNNN (ex.: 01.3016)
+
+Somente dígitos longos (ex.: 2007001000) → convertível para pontuado se bater com os grupos.
+
+Exemplo:
+
+01.1448 - Garfo p/ Churrasco G 45 INOX
+→ SKU_CODE_CANON = 01.1448
+→ SKU_NAME_CANON = Garfo p/ Churrasco G 45 INOX
+
+8.2. Alias de código (equivalências)
+
+Códigos históricos/compactos/variantes (ex.: 2007001000) apontam para um código canônico (ex.: 20.07.001.0001).
+
+8.3. Nome canônico (descrição)
+
+Várias descrições para o mesmo código → escolher 1 nome oficial (curto, claro, com gramatura quando aplicável).
+
+Um mesmo nome em vários códigos → decidir se é:
+
+Mudança cadastral (antigo/novo) ⇒ manter 1 ativo e mapear os demais como alias/descontinuados.
+
+SKUs distintos (ex.: gramatura/sabor) ⇒ diferenciar no nome (ex.: “300G” vs “200G”).
+
+8.4. Cliente canônico (quando houver coluna de cliente)
+
+Remover sufixos (LTDA, ME, EPP, MATRIZ, FILIAL…), acentos e espaços duplicados.
+
+Sugerir mesclagens com fuzzy-match (similaridade ≥ 0,92), quando implementado.
+
+9. Templates de calibração (acerto fino)
+
+Onde colocar: crie a pasta calibration/ na raiz do projeto.
+
+9.1. calibration/sku_alias.csv
+
+Mapeia códigos observados → código canônico.
+
+Colunas: observed_code,canon_code,notes
+
+2007001000,20.07.001.0001,formato compacto convertido
+11FAROFACO,11,alias textual antigo
+
+9.2. calibration/sku_name_canon.csv
+
+Define o nome oficial por código.
+
+Colunas: canon_code,canon_name
+
+20.07.001.0001,FAROFA TRADICIONAL CROCANTE 300G
+20.07.001.0002,FAROFA DE COSTELA CROCANTE 300G
+01.1448,GARFO P/ CHURRASCO G 45 INOX
+
+9.3. calibration/client_canon.csv (opcional)
+
+Colunas: original,canon
+Quando quiser forçar merges de clientes específicos.
+
+Esses arquivos são lidos antes dos cálculos para garantir que tudo esteja uniforme.
+
+10. Como rodar (exemplos)
+10.1. Normalização offline (Excel → Excel)
+
+Supondo um módulo de normalização (ajuste o caminho conforme seu projeto):
+
+python -m ipro.tools.normalize \
+  --input data/raw/IPRO_Export_2025-09-30.xlsx \
+  --out outputs/Base_Normalizada.xlsx \
+  --alias calibration/sku_alias.csv \
+  --names calibration/sku_name_canon.csv \
+  --clients calibration/client_canon.csv
+
+10.2. API (se o projeto expõe FastAPI)
+uvicorn ipro.api:app --host 0.0.0.0 --port 8000 --reload
+# GET  /health
+# POST /process   (envia arquivo .xlsx e recebe base normalizada/insights)
+
+
+Dica: mantenha outputs/ e data/raw/ fora do Git (já coberto pelo .gitignore).
+
+11. Qualidade
+
+Validações: SKU ↔ Produto, numéricos em pt-BR (, como decimal), subtotal ≈ preço × qtd (tolerância ~1%).
+
+Testes unitários recomendados:
+
+Extração de SKU.
+
+Nome canônico.
+
+Cliente canônico.
+
+Parser numérico de valores em pt-BR.
+
+12. Git & Segurança
+
+.env nunca vai para o repositório. Use apenas .env.example.
+
+.gitignore cobre:
+
+caches do Python, .venv, Excel/CSV, builds, node_modules etc.
+
+Recomenda-se proteger a branch main no GitHub.
+
+13. Troubleshooting
+
+"git" não é reconhecido
+
+Reabra o terminal ou use C:\Program Files\Git\cmd\git.exe.
+
+uvicorn não encontrado
+
+pip install uvicorn fastapi (ou use Poetry).
+
+Erro de locale/decimal ao ler Excel
+
+Normalize vírgula/ponto antes de converter para número.
+
+CORS em dev
+
+Ajuste ALLOWED_ORIGINS no .env.
+
+Timezone
+
+TZ=America/Recife no .env ou configure no sistema.
+
+14. Licença
+
+Uso interno.
+Defina a licença conforme a política da organização antes de tornar o repositório público.
+
+15. Créditos
+
+IPRO — Inteligência de Pedidos PRO.
+Pipeline de dados criado para dar visão de giro, mix e comportamento de compra em operações B2B.
