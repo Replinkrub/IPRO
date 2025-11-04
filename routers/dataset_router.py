@@ -1,18 +1,27 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
+from fastapi.responses import FileResponse
 from typing import List
 import hashlib
 import os
+import tempfile
 from uuid import uuid4
 from datetime import datetime
+
+import pandas as pd
+import logging
+
 from core.utils import utc_now
 
 from services.database import get_db
 from services.models import UploadResponse, DatasetSummary
+from analytics.metrics import MetricsCalculator
 from services.extractor import DataExtractor
 from services.validator import DataValidator
 from services.normalizer import DataNormalizer
 from decimal import Decimal
 from pymongo.errors import BulkWriteError, DuplicateKeyError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -174,62 +183,100 @@ async def upload_batch(request: Request, files: List[UploadFile] = File(...), db
         })
         raise HTTPException(status_code=500, detail=f"Erro no processamento: {str(e)}")
 
+
+@router.post("/extract/base-completa")
+async def extract_base_completa(file: UploadFile = File(...)):
+    """Retornar planilha Base Completa diretamente do upload."""
+    if not file.filename.lower().endswith('.xlsx'):
+        raise HTTPException(status_code=400, detail="Envie um arquivo .xlsx válido")
+
+    extractor = DataExtractor()
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_in:
+            content = await file.read()
+            tmp_in.write(content)
+            tmp_in.flush()
+            extracted = extractor.extract_transactions(tmp_in.name)
+    except Exception as exc:
+        logger.error("Falha na extração da Base Completa", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao ler o arquivo: {exc}")
+
+    if not extracted:
+        logger.warning("Arquivo %s não possui linhas válidas", file.filename)
+        raise HTTPException(status_code=400, detail="Nenhuma linha válida encontrada no arquivo")
+
+    df = pd.DataFrame(extracted)
+    for col in df.columns:
+        if 'date' in col or 'data' in col:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_out:
+        df.to_excel(tmp_out.name, index=False)
+        export_path = tmp_out.name
+
+    filename = f"Base_Completa_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return FileResponse(export_path, filename=filename, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
 @router.get("/dataset/{dataset_id}/summary", response_model=DatasetSummary)
 async def get_dataset_summary(dataset_id: str, db=Depends(get_db)):
-    """Retornar resumo do dataset"""
+    """Retornar visão geral consolidada do dataset."""
     try:
-        # Verificar se o dataset existe
         dataset = db.datasets.find_one({"_id": dataset_id})
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset não encontrado")
-        
-        # Calcular estatísticas
+
         transactions = list(db.transactions.find({"dataset_id": dataset_id}))
-        
         if not transactions:
             raise HTTPException(status_code=404, detail="Nenhuma transação encontrada para este dataset")
-        
-        # Clientes únicos
-        unique_clients = len(set(t["client"] for t in transactions))
-        
-        # SKUs únicos
-        unique_skus = len(set(t["sku"] for t in transactions))
-        
-        # Período
-        dates = [t["date"] for t in transactions]
-        period_start = min(dates)
-        period_end = max(dates)
-        
-        # Regiões
-        regions = sorted({t.get("uf") for t in transactions if t.get("uf")})
 
-        # Mix básico (top 5 por receita)
-        total_revenue = float(sum(t["subtotal"] for t in transactions)) if transactions else 0.0
-        top_products = {}
-        for t in transactions:
-            sku = t.get("sku") or t["product"]
-            d = top_products.setdefault(sku, {"revenue": 0.0, "qty": 0, "product": t.get("product", sku)})
-            d["revenue"] += float(t["subtotal"])
-            d["qty"] += int(t["qty"])
+        calculator = MetricsCalculator()
+        kpis = calculator.calculate_general_kpis(transactions)
 
-        top5 = dict(sorted(top_products.items(), key=lambda x: x[1]["revenue"], reverse=True)[:5])
+        df = pd.DataFrame(transactions)
+        df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
+        df['qty'] = pd.to_numeric(df.get('qty'), errors='coerce').fillna(0)
+        receita_por_sku = df.groupby('sku')['subtotal'].sum()
+        hero_threshold = receita_por_sku.quantile(0.8) if not receita_por_sku.empty else 0.0
+        hero_value = float(receita_por_sku[receita_por_sku >= hero_threshold].sum()) if hero_threshold else float(receita_por_sku.sum())
+        total_revenue = float(df['subtotal'].sum())
+        hero_ratio = (hero_value / total_revenue) if total_revenue else 0.0
+
+        regioes = sorted({t.get('uf') for t in transactions if t.get('uf')})
+
+        top_products = (
+            df.groupby(['sku', 'product'])[['subtotal', 'qty']]
+            .sum()
+            .reset_index()
+            .sort_values('subtotal', ascending=False)
+            .head(5)
+        )
+        mix = {
+            'total_revenue': total_revenue,
+            'hero_share_value': hero_value,
+            'hero_share_ratio': hero_ratio,
+            'top_products': [
+                {
+                    'sku': row['sku'],
+                    'product': row['product'],
+                    'revenue': float(row['subtotal']),
+                    'qty': int(row['qty']),
+                }
+                for _, row in top_products.iterrows()
+            ],
+        }
 
         return DatasetSummary(
-            n_clientes=unique_clients,
-            n_skus=unique_skus,
+            n_clientes=int(kpis.get('total_customers', 0)),
+            n_skus=int(kpis.get('total_products', 0)),
             periodo={
-                "inicio": period_start.isoformat(),
-                "fim": period_end.isoformat(),
-                "meses": (period_end - period_start).days // 30
+                'inicio': kpis.get('period_start'),
+                'fim': kpis.get('period_end'),
+                'meses': int(kpis.get('period_days', 0) / 30) if kpis.get('period_days') else 0,
             },
-            regioes=regions,
-            mix={
-                "total_revenue": total_revenue,
-                "top_products": top5
-            }
+            regioes=regioes,
+            mix=mix,
         )
 
-        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao gerar resumo: {str(e)}")
 

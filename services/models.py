@@ -61,6 +61,8 @@ class CustomerAnalytics(BaseModel):
     city: Optional[str] = None
     uf: Optional[str] = None
     last_order: Optional[datetime] = None
+    rfm_score: float = 0.0
+    segment_weight: float = 1.0
 
 class ProductAnalytics(BaseModel):
     dataset_id: str
@@ -70,16 +72,28 @@ class ProductAnalytics(BaseModel):
     qty: int
     revenue: Decimal
     avg_ticket: Optional[Decimal] = None
+    turnover_median: Optional[float] = None
+    hero_mix: Optional[bool] = None
+    growth_zscore: Optional[float] = None
+    growth_yoy: Optional[float] = None
 
 class Alert(BaseModel):
     dataset_id: str
     client: str
     sku: Optional[str] = None
-    type: str  # ruptura, inatividade, crescimento, oportunidade
-    diagnosis: str
-    recommended_action: str
+    type: str  # ruptura, queda_brusca, outlier, etc.
+    insight: Optional[str] = None
+    action: Optional[str] = None
+    diagnosis: Optional[str] = None
+    recommended_action: Optional[str] = None
     reliability: str  # 🔵, 🟡, 🔴
     suggested_deadline: Optional[str] = None
+
+    def dict(self, *args, **kwargs):  # type: ignore[override]
+        data = super().dict(*args, **kwargs)
+        data.setdefault("diagnosis", data.get("insight"))
+        data.setdefault("recommended_action", data.get("action"))
+        return data
 
 class Cohort(BaseModel):
     dataset_id: str
