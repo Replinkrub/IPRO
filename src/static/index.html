@@ -51,8 +51,8 @@
                 <button class="tab-btn py-4 px-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700" data-tab="mix">
                     <i class="fas fa-boxes mr-2"></i>Inteligência de Mix
                 </button>
-                <button class="tab-btn py-4 px-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700" data-tab="rico">
-                    <i class="fas fa-exclamation-triangle mr-2"></i>R.I.C.O.
+                <button class="tab-btn py-4 px-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700" data-tab="relacional">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>Relacional &amp; Atendimento
                 </button>
                 <button class="tab-btn py-4 px-2 border-b-2 border-transparent hover:border-gray-300 text-gray-500 hover:text-gray-700" data-tab="comportamental">
                     <i class="fas fa-brain mr-2"></i>Inteligência Comportamental
@@ -148,8 +148,26 @@
                     <p class="text-gray-600">Cadastro e metadados dos clientes</p>
                 </div>
                 <div class="p-6">
+                    <div id="summaryCards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 hidden">
+                        <div class="bg-blue-50 rounded-lg p-4">
+                            <p class="text-sm text-blue-700">Clientes ativos</p>
+                            <p id="summaryClients" class="text-2xl font-semibold text-blue-900">-</p>
+                        </div>
+                        <div class="bg-indigo-50 rounded-lg p-4">
+                            <p class="text-sm text-indigo-700">SKUs na base</p>
+                            <p id="summarySkus" class="text-2xl font-semibold text-indigo-900">-</p>
+                        </div>
+                        <div class="bg-teal-50 rounded-lg p-4">
+                            <p class="text-sm text-teal-700">Período coberto</p>
+                            <p id="summaryPeriod" class="text-lg font-semibold text-teal-900">-</p>
+                        </div>
+                        <div class="bg-amber-50 rounded-lg p-4">
+                            <p class="text-sm text-amber-700">Receita Mix Herói</p>
+                            <p id="summaryHeroShare" class="text-lg font-semibold text-amber-900">-</p>
+                        </div>
+                    </div>
                     <div class="mb-4">
-                        <input type="text" id="clientSearch" placeholder="Buscar cliente..." 
+                        <input type="text" id="clientSearch" placeholder="Buscar cliente..."
                                class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
                     <div class="overflow-x-auto">
@@ -209,27 +227,26 @@
             </div>
         </div>
 
-        <!-- R.I.C.O. Tab -->
-        <div id="rico" class="tab-content hidden">
+        <!-- Relacional & Atendimento Tab -->
+        <div id="relacional" class="tab-content hidden">
             <div class="bg-white rounded-lg shadow">
                 <div class="p-6 border-b">
-                    <h2 class="text-xl font-bold">Alertas R.I.C.O.</h2>
-                    <p class="text-gray-600">Ruptura, Inatividade, Crescimento, Oportunidade</p>
+                    <h2 class="text-xl font-bold">Relacional &amp; Atendimento</h2>
+                    <p class="text-gray-600">Ruptura projetada, queda brusca e outliers de volume</p>
                 </div>
                 <div class="p-6">
                     <div class="mb-4 flex space-x-4">
                         <select id="alertTypeFilter" class="px-4 py-2 border rounded-lg">
                             <option value="">Todos os tipos</option>
-                            <option value="ruptura">Ruptura</option>
-                            <option value="inatividade">Inatividade</option>
-                            <option value="crescimento">Crescimento</option>
-                            <option value="oportunidade">Oportunidade</option>
+                            <option value="ruptura">Ruptura projetada</option>
+                            <option value="queda_brusca">Queda brusca</option>
+                            <option value="outlier_volume">Outlier de volume</option>
                         </select>
                         <select id="reliabilityFilter" class="px-4 py-2 border rounded-lg">
                             <option value="">Todas as confiabilidades</option>
-                            <option value="🔵">Alta (🔵)</option>
-                            <option value="🟡">Média (🟡)</option>
-                            <option value="🔴">Baixa (🔴)</option>
+                            <option value="🔴">Crítico (🔴)</option>
+                            <option value="🟡">Atenção (🟡)</option>
+                            <option value="🔵">Monitorar (🔵)</option>
                         </select>
                     </div>
                     <div id="alertsList" class="space-y-4">
@@ -297,25 +314,38 @@
         // Configuração global
         let currentDatasetId = null;
         let currentData = null;
+        let datasetSummary = null;
 
-        // Configuração do Axios
-        if (window.IPRO_CONFIG) {
-            axios.defaults.baseURL = window.IPRO_CONFIG.baseUrl;
-            axios.defaults.headers.common['X-API-Key'] = window.IPRO_CONFIG.apiKey;
+        // Cliente HTTP com interceptors padrão
+        const api = (() => {
+            const baseURL = window.IPRO_CONFIG?.baseUrl || window.location.origin;
+            const instance = axios.create({ baseURL });
+            instance.interceptors.request.use((config) => {
+                const token = window.IPRO_CONFIG?.jwt;
+                const apiKey = window.IPRO_CONFIG?.apiKey;
+                if (token) {
+                    config.headers.Authorization = `Bearer ${token}`;
+                }
+                if (apiKey) {
+                    config.headers['X-API-Key'] = apiKey;
+                }
+                return config;
+            });
+            return instance;
+        })();
+
+        // Funções auxiliares
+        function setText(id, v) {
+            const el = document.getElementById(id);
+            if (el) el.textContent = v;
         }
 
-        // Funções auxiliares para KPIs
-        function setText(id, v) { 
-            const el = document.getElementById(id); 
-            if(el) el.textContent = v; 
-        }
-        
-        function moneyBR(v) { 
-            try { 
-                return v.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}); 
-            } catch(_) { 
-                return 'R$ ' + Number(v||0).toFixed(2); 
-            } 
+        function moneyBR(v) {
+            try {
+                return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            } catch (_) {
+                return 'R$ ' + Number(v || 0).toFixed(2);
+            }
         }
 
         function computeKpisFromResponse(data) {
@@ -323,15 +353,15 @@
             const total = arr.length;
             const num = v => Number.isFinite(+v) ? +v : 0;
 
-            const rec = total ? Math.round(arr.reduce((a,r)=>a+num(r.recency ?? r.R_recency_days ?? r.R_days),0)/total) : 0;
-            const fqs = total ? arr.reduce((a,r)=>a+num(r.order_count ?? r.orders ?? r.F_count ?? r.freq ?? r.frequency),0)/total : 0;
+            const rec = total ? Math.round(arr.reduce((a, r) => a + num(r.recency ?? r.R_recency_days ?? r.R_days), 0) / total) : 0;
+            const fqs = total ? arr.reduce((a, r) => a + num(r.order_count ?? r.orders ?? r.F_count ?? r.freq ?? r.frequency), 0) / total : 0;
 
             let avgM = 0;
             const ticks = arr.map(r => num(r.avg_ticket ?? r.ticket_medio)).filter(Boolean);
-            if (ticks.length) avgM = ticks.reduce((a,b)=>a+b,0)/ticks.length;
+            if (ticks.length) avgM = ticks.reduce((a, b) => a + b, 0) / ticks.length;
             else {
-                const mon = arr.reduce((a,r)=>a+num(r.monetary ?? r.total_value),0);
-                const ord = arr.reduce((a,r)=>a+num(r.order_count ?? r.orders ?? 0),0);
+                const mon = arr.reduce((a, r) => a + num(r.monetary ?? r.total_value), 0);
+                const ord = arr.reduce((a, r) => a + num(r.order_count ?? r.orders ?? 0), 0);
                 avgM = ord ? mon / ord : 0;
             }
             return { total, avgR: rec, avgF: fqs, avgM };
@@ -342,6 +372,43 @@
             setText('avgRecency', `${k?.avgR ?? 0} dias`);
             setText('avgFrequency', (k?.avgF ?? 0).toFixed(1));
             setText('avgTicket', moneyBR(k?.avgM ?? 0));
+        }
+
+        function renderDatasetSummary(summary) {
+            const wrapper = document.getElementById('summaryCards');
+            if (!wrapper) return;
+            if (!summary) {
+                wrapper.classList.add('hidden');
+                return;
+            }
+            wrapper.classList.remove('hidden');
+            setText('summaryClients', summary.n_clientes ?? '-');
+            setText('summarySkus', summary.n_skus ?? '-');
+            const periodo = summary.periodo || {};
+            const inicio = periodo.inicio ? new Date(periodo.inicio).toLocaleDateString('pt-BR') : '-';
+            const fim = periodo.fim ? new Date(periodo.fim).toLocaleDateString('pt-BR') : '-';
+            setText('summaryPeriod', `${inicio} – ${fim}`);
+            const heroRatio = (summary.mix?.hero_share_ratio ?? 0) * 100;
+            const heroValue = summary.mix?.hero_share_value ?? 0;
+            setText('summaryHeroShare', `${heroRatio.toFixed(1)}% (${moneyBR(heroValue)})`);
+        }
+
+        async function fetchDatasetSummary(force = false) {
+            if (!currentDatasetId) return null;
+            if (!force && datasetSummary) {
+                renderDatasetSummary(datasetSummary);
+                return datasetSummary;
+            }
+            try {
+                const response = await api.get(`/api/dataset/${currentDatasetId}/summary`);
+                datasetSummary = response.data;
+                renderDatasetSummary(datasetSummary);
+                return datasetSummary;
+            } catch (error) {
+                console.error('Erro ao carregar resumo do dataset:', error);
+                renderDatasetSummary(null);
+                return null;
+            }
         }
 
         // Gerenciamento de abas
@@ -371,7 +438,7 @@
 
             // Carregar dados específicos da aba
             if (currentDatasetId) {
-                loadTabData(tabId);
+                loadTabData(tabId).catch(err => console.error('Erro ao carregar aba', tabId, err));
             }
         }
 
@@ -418,13 +485,14 @@
                 showLoading(true);
                 document.getElementById('uploadModal').classList.add('hidden');
 
-                const response = await axios.post('/api/upload-batch', formData, {
+                const response = await api.post('/api/upload-batch', formData, {
                     headers: {
                         'Content-Type': 'multipart/form-data'
                     }
                 });
 
                 currentDatasetId = response.data.dataset_id;
+                datasetSummary = null;
                 document.getElementById('exportBtn').disabled = false;
 
                 // Carregar dados iniciais
@@ -447,7 +515,7 @@
             if (!currentDatasetId) return;
 
             try {
-                const response = await axios.get(`/api/export/${currentDatasetId}/excel`, {
+                const response = await api.get(`/api/export/${currentDatasetId}/excel`, {
                     responseType: 'blob'
                 });
 
@@ -469,13 +537,13 @@
         // Funções de carregamento de dados
         async function loadDashboardData() {
             try {
-                const response = await axios.post(`/api/analyze-customers/${currentDatasetId}`);
+                await fetchDatasetSummary(true);
+                const response = await api.post(`/api/analyze-customers/${currentDatasetId}`);
                 const kpis = response.data?.kpis || computeKpisFromResponse(response.data);
                 updateTopCards(kpis);
 
                 // Carregar gráficos
-                await loadTopProductsChart();
-                await loadSegmentationChart();
+                await Promise.all([loadTopProductsChart(), loadSegmentationChart()]);
 
             } catch (error) {
                 console.error('Erro ao carregar dashboard:', error);
@@ -487,7 +555,7 @@
                 case 'identificacao':
                     await loadCustomersData();
                     break;
-                case 'rico':
+                case 'relacional':
                     await loadAlertsData();
                     break;
                 // Adicionar outros casos conforme necessário
@@ -496,8 +564,11 @@
 
         async function loadCustomersData() {
             try {
-                const response = await axios.post(`/api/analyze-customers/${currentDatasetId}`);
-                const customers = response.data.customer_analytics;
+                const [, response] = await Promise.all([
+                    fetchDatasetSummary(),
+                    api.post(`/api/analyze-customers/${currentDatasetId}`)
+                ]);
+                const customers = response.data.customer_analytics || [];
                 const kpis = response.data?.kpis || computeKpisFromResponse(response.data);
                 updateTopCards(kpis);
 
@@ -523,8 +594,17 @@
 
         async function loadAlertsData() {
             try {
-                const response = await axios.post(`/api/alerts/rico/${currentDatasetId}`);
-                const alerts = response.data;
+                const typeFilter = document.getElementById('alertTypeFilter')?.value || '';
+                const reliabilityFilter = document.getElementById('reliabilityFilter')?.value || '';
+                const response = await api.get(`/api/alerts/rico/${currentDatasetId}`);
+                let alerts = response.data || [];
+
+                if (typeFilter) {
+                    alerts = alerts.filter(alert => alert.type === typeFilter);
+                }
+                if (reliabilityFilter) {
+                    alerts = alerts.filter(alert => alert.reliability === reliabilityFilter);
+                }
 
                 const alertsList = document.getElementById('alertsList');
                 alertsList.innerHTML = '';
@@ -532,22 +612,25 @@
                 alerts.forEach(alert => {
                     const alertItem = document.createElement('div');
                     alertItem.className = 'border rounded-lg p-4';
-                    
-                    const reliabilityColor = alert.reliability === '🔵' ? 'bg-blue-100 text-blue-800' :
+
+                    const reliabilityColor = alert.reliability === '🔴' ? 'bg-red-100 text-red-800' :
                                            alert.reliability === '🟡' ? 'bg-yellow-100 text-yellow-800' :
-                                           'bg-red-100 text-red-800';
+                                           'bg-blue-100 text-blue-800';
+                    const typeLabel = (alert.type || '').replace('_', ' ').toUpperCase();
+                    const insight = alert.insight || alert.diagnosis || '';
+                    const action = alert.action || alert.recommended_action || '';
 
                     alertItem.innerHTML = `
                         <div class="flex items-start justify-between">
                             <div class="flex-1">
                                 <div class="flex items-center space-x-2 mb-2">
                                     <span class="px-2 py-1 text-xs font-medium rounded ${reliabilityColor}">
-                                        ${alert.type.toUpperCase()}
+                                        ${typeLabel}
                                     </span>
                                     <span class="text-sm text-gray-500">${alert.client}</span>
                                 </div>
-                                <p class="text-sm text-gray-700 mb-2">${alert.diagnosis}</p>
-                                <p class="text-sm font-medium text-gray-900">${alert.recommended_action}</p>
+                                <p class="text-sm text-gray-700 mb-2">${insight}</p>
+                                <p class="text-sm font-medium text-gray-900">${action}</p>
                             </div>
                             <div class="ml-4 text-right">
                                 <div class="text-2xl">${alert.reliability}</div>
@@ -565,7 +648,7 @@
 
         async function loadTopProductsChart() {
             try {
-                const response = await axios.get(`/api/products/${currentDatasetId}/top?by=receita`);
+                const response = await api.get(`/api/products/${currentDatasetId}/top?by=receita`);
                 const products = response.data.slice(0, 10);
 
                 const ctx = document.getElementById('topProductsChart').getContext('2d');
@@ -603,7 +686,7 @@
 
         async function loadSegmentationChart() {
             try {
-                const response = await axios.get(`/api/customers/${currentDatasetId}/segments`);
+                const response = await api.get(`/api/customers/${currentDatasetId}/segments`);
                 const segments = response.data;
 
                 const ctx = document.getElementById('segmentationChart').getContext('2d');
@@ -636,6 +719,17 @@
                 console.error('Erro ao carregar gráfico de segmentação:', error);
             }
         }
+
+        ['alertTypeFilter', 'reliabilityFilter'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                element.addEventListener('change', () => {
+                    if (currentDatasetId) {
+                        loadAlertsData().catch(err => console.error('Erro ao filtrar alertas', err));
+                    }
+                });
+            }
+        });
 
         function showLoading(show) {
             const loading = document.getElementById('loading');

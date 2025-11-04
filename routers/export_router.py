@@ -2,9 +2,10 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 import os
 import tempfile
+from decimal import Decimal
 
 from services.database import get_db
-from services.exporter import ExcelExporter
+from services.reports import ProReportBuilder
 
 router = APIRouter()
 
@@ -27,20 +28,30 @@ async def export_excel(dataset_id: str, db=Depends(get_db)):
             raise HTTPException(status_code=404, detail="Nenhuma transação encontrada")
         
         # Gerar arquivo Excel
-        exporter = ExcelExporter()
+        def sanitize(items):
+            cleaned = []
+            for item in items:
+                data = dict(item)
+                data.pop('_id', None)
+                for key, value in list(data.items()):
+                    if isinstance(value, Decimal):
+                        data[key] = float(value)
+                cleaned.append(data)
+            return cleaned
+
+        exporter = ProReportBuilder()
         
         # Criar arquivo temporário
         with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_file:
             excel_path = tmp_file.name
         
         # Exportar dados
-        exporter.export_to_excel(
+        exporter.build(
             excel_path,
-            transactions,
-            customer_analytics,
-            product_analytics,
-            alerts,
-            dataset_id
+            sanitize(transactions),
+            sanitize(customer_analytics),
+            sanitize(product_analytics),
+            sanitize(alerts)
         )
         
         # Retornar arquivo
