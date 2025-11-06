@@ -1,293 +1,195 @@
+"""Geração de insights R.I.C.O. com enriquecimento estatístico."""
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Iterable, List
+
 import numpy as np
 import pandas as pd
-from typing import List, Dict, Any
-from datetime import datetime, timedelta
-from uuid import UUID
-import logging
-import os
 
+from analytics.estatistica import (
+    calcular_cv_giro,
+    calcular_probabilidade_recompra,
+    detectar_outlier_volume,
+    intervalo_confianca_giro,
+    score_sobrevivencia_bayesiana,
+)
+from analytics.segmentador_pdv import SegmentadorPDV
 from services.models import Alert
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 class InsightsGenerator:
-    """Gerador de insights R.I.C.O. (Ruptura, Inatividade, Crescimento, Oportunidade)"""
-    
-    def __init__(self):
-        self.reference_date = datetime.now()
-        self.ruptura_threshold = float(os.getenv("RUPTURA_JANELA_ALERTA", "0.75"))
-        self.delay_logistico = int(os.getenv("DELAY_LOGISTICO_PADRAO", "20"))
-    
-    def generate_rico_insights(self, transactions: List[Dict[str, Any]], dataset_id: UUID) -> List[Alert]:
-        """Gerar insights R.I.C.O. completos"""
-        try:
-            df = pd.DataFrame(transactions)
-            df['date'] = pd.to_datetime(df['date'])
-            
-            alerts = []
-            
-            # Gerar alertas de Ruptura
-            ruptura_alerts = self._generate_ruptura_alerts(df, dataset_id)
-            alerts.extend(ruptura_alerts)
-            
-            # Gerar alertas de Inatividade
-            inatividade_alerts = self._generate_inatividade_alerts(df, dataset_id)
-            alerts.extend(inatividade_alerts)
-            
-            # Gerar alertas de Crescimento
-            crescimento_alerts = self._generate_crescimento_alerts(df, dataset_id)
-            alerts.extend(crescimento_alerts)
-            
-            # Gerar alertas de Oportunidade
-            oportunidade_alerts = self._generate_oportunidade_alerts(df, dataset_id)
-            alerts.extend(oportunidade_alerts)
-            
-            logger.info(f"Gerados {len(alerts)} insights R.I.C.O.")
-            return alerts
-            
-        except Exception as e:
-            logger.error(f"Erro na geração de insights: {e}")
+    """Gerar alertas padronizados do framework R.I.C.O."""
+
+    def __init__(self, delay_logistico: int = 20):
+        self.reference_date = datetime.utcnow()
+        self.delay_logistico = delay_logistico
+        self.segmentador = SegmentadorPDV()
+
+    # ------------------------------------------------------------------
+    # API pública
+    # ------------------------------------------------------------------
+    def generate_rico_insights(self, transactions: Iterable[Dict], dataset_id: str) -> List[Alert]:
+        df = pd.DataFrame(list(transactions))
+        if df.empty:
             return []
-    
-    def _generate_ruptura_alerts(self, df: pd.DataFrame, dataset_id: UUID) -> List[Alert]:
-        """Gerar alertas de ruptura baseados no giro médio"""
-        alerts = []
-        
-        try:
-            # Analisar por cliente-produto
-            for (client, sku), group in df.groupby(['client', 'sku']):
-                if len(group) < 2:
-                    continue
-                
-                # Calcular giro médio
-                dates = sorted(group['date'].unique())
-                intervals = []
-                for i in range(1, len(dates)):
-                    interval = (dates[i] - dates[i-1]).days
-                    intervals.append(interval)
-                
-                if not intervals:
-                    continue
-                
-                giro_medio = np.median(intervals)
-                last_purchase = dates[-1]
-                days_since_last = (self.reference_date - last_purchase).days
-                
-                # Verificar ruptura projetada
-                ruptura_threshold_days = giro_medio * self.ruptura_threshold + self.delay_logistico
-                
-                if days_since_last >= ruptura_threshold_days:
-                    # Calcular confiabilidade
-                    reliability = self._calculate_reliability(group, intervals)
-                    
-                    # Gerar diagnóstico e ação
-                    diagnosis = f"Cliente {client} não compra {group.iloc[0]['product']} há {days_since_last} dias. Giro médio: {giro_medio:.1f} dias."
-                    action = f"Contatar cliente em até 3 dias. Oferecer condições especiais ou verificar necessidade."
-                    
-                    alert = Alert(
-                        dataset_id=dataset_id,
-                        client=client,
-                        sku=sku,
-                        type="ruptura",
-                        diagnosis=diagnosis,
-                        recommended_action=action,
-                        reliability=reliability,
-                        suggested_deadline="3 dias"
-                    )
-                    
-                    alerts.append(alert)
-            
-            logger.info(f"Gerados {len(alerts)} alertas de ruptura")
-            return alerts
-            
-        except Exception as e:
-            logger.error(f"Erro nos alertas de ruptura: {e}")
-            return []
-    
-    def _generate_inatividade_alerts(self, df: pd.DataFrame, dataset_id: UUID) -> List[Alert]:
-        """Gerar alertas de inatividade de clientes"""
-        alerts = []
-        
-        try:
-            # Analisar por cliente
-            for client, group in df.groupby('client'):
-                last_purchase = group['date'].max()
-                days_inactive = (self.reference_date - last_purchase).days
-                
-                # Classificar inatividade
-                if days_inactive >= 90:
-                    status = "inativo antigo"
-                    urgency = "🔴"
-                    deadline = "1 semana"
-                elif days_inactive >= 60:
-                    status = "inativo recente"
-                    urgency = "🟡"
-                    deadline = "3 dias"
-                elif days_inactive >= 30:
-                    status = "em risco"
-                    urgency = "🔵"
-                    deadline = "2 dias"
-                else:
-                    continue  # Cliente ativo
-                
-                # Calcular estatísticas do cliente
-                total_orders = group['order_id'].nunique()
-                total_spent = group['subtotal'].sum()
-                avg_ticket = total_spent / total_orders
-                
-                # Gerar diagnóstico e ação
-                diagnosis = f"Cliente {client} está {status} ({days_inactive} dias). Histórico: {total_orders} pedidos, ticket médio R$ {avg_ticket:.2f}."
-                
-                if status == "inativo antigo":
-                    action = "Campanha de reativação com desconto especial. Verificar se mudou de fornecedor."
-                elif status == "inativo recente":
-                    action = "Contato comercial para entender motivo da ausência. Oferecer novidades."
-                else:
-                    action = "Follow-up preventivo. Verificar satisfação e necessidades futuras."
-                
-                alert = Alert(
+
+        df['date'] = pd.to_datetime(df['date'])
+        df['qty'] = pd.to_numeric(df['qty'], errors='coerce').fillna(0)
+        df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
+
+        segmentos = {seg.client: seg for seg in self.segmentador.avaliar(df.to_dict('records'))}
+
+        alerts: List[Alert] = []
+        alerts.extend(self._ruptura_alerts(df, dataset_id, segmentos))
+        alerts.extend(self._queda_brusca_alerts(df, dataset_id, segmentos))
+        alerts.extend(self._outlier_volume_alerts(df, dataset_id, segmentos))
+        return alerts
+
+    # ------------------------------------------------------------------
+    # Regras de negócio
+    # ------------------------------------------------------------------
+    def _ruptura_alerts(self, df: pd.DataFrame, dataset_id: str, segmentos) -> List[Alert]:
+        resultados: List[Alert] = []
+        for (client, sku), group in df.groupby(['client', 'sku']):
+            if group.shape[0] < 2:
+                continue
+
+            datas = group.sort_values('date')['date'].tolist()
+            prob_recompra = calcular_probabilidade_recompra(datas, janela_dias=90)
+            intervalos = [
+                (datas[i] - datas[i - 1]).days
+                for i in range(1, len(datas))
+            ]
+            if not intervalos:
+                continue
+
+            giro_mediano = float(np.median(intervalos))
+            previsao = giro_mediano + self.delay_logistico
+            dias_sem_compra = (self.reference_date - datas[-1]).days
+            confianca = min(1.0, dias_sem_compra / max(1.0, previsao))
+            reliability = self._score_para_reliability(confianca)
+
+            ic_low, ic_high = intervalo_confianca_giro(intervalos)
+            insight = (
+                f"Cliente {client} sem comprar {sku} há {dias_sem_compra} dias. "
+                f"Giro mediano {giro_mediano:.1f}d (IC {ic_low:.0f}-{ic_high:.0f}) e prob. recompra {prob_recompra*100:.0f}%."
+            )
+            gatilhos = segmentos.get(client)
+            action = "Contatar cliente e reservar estoque para reposição imediata."
+            if gatilhos and gatilhos.gatilhos:
+                action += " Triggers: " + ", ".join(gatilhos.gatilhos)
+
+            resultados.append(
+                Alert(
                     dataset_id=dataset_id,
                     client=client,
-                    sku=None,
-                    type="inatividade",
-                    diagnosis=diagnosis,
-                    recommended_action=action,
-                    reliability=urgency,
-                    suggested_deadline=deadline
+                    sku=sku,
+                    type="ruptura",
+                    insight=insight,
+                    action=action,
+                    reliability=reliability,
+                    suggested_deadline="3 dias",
                 )
-                
-                alerts.append(alert)
-            
-            logger.info(f"Gerados {len(alerts)} alertas de inatividade")
-            return alerts
-            
-        except Exception as e:
-            logger.error(f"Erro nos alertas de inatividade: {e}")
-            return []
-    
-    def _generate_crescimento_alerts(self, df: pd.DataFrame, dataset_id: UUID) -> List[Alert]:
-        """Gerar alertas de oportunidades de crescimento"""
-        alerts = []
-        
-        try:
-            # Analisar crescimento por cliente nos últimos meses
-            cutoff_date = self.reference_date - timedelta(days=90)
-            recent_data = df[df['date'] >= cutoff_date]
-            
-            for client, group in recent_data.groupby('client'):
-                if len(group) < 3:  # Precisa de pelo menos 3 compras
-                    continue
-                
-                # Calcular tendência de crescimento
-                monthly_sales = group.groupby(group['date'].dt.to_period('M'))['subtotal'].sum()
-                
-                if len(monthly_sales) >= 2:
-                    # Calcular crescimento percentual
-                    growth_rates = []
-                    for i in range(1, len(monthly_sales)):
-                        if monthly_sales.iloc[i-1] > 0:
-                            growth = (monthly_sales.iloc[i] - monthly_sales.iloc[i-1]) / monthly_sales.iloc[i-1] * 100
-                            growth_rates.append(growth)
-                    
-                    if growth_rates:
-                        avg_growth = np.mean(growth_rates)
-                        
-                        # Alertar sobre crescimento significativo
-                        if avg_growth > 15:  # Crescimento > 15% ao mês
-                            diagnosis = f"Cliente {client} em crescimento acelerado ({avg_growth:.1f}% ao mês). Oportunidade de expansão."
-                            action = "Propor aumento de linha de crédito. Oferecer produtos complementares. Negociar condições especiais para volumes maiores."
-                            
-                            alert = Alert(
-                                dataset_id=dataset_id,
-                                client=client,
-                                sku=None,
-                                type="crescimento",
-                                diagnosis=diagnosis,
-                                recommended_action=action,
-                                reliability="🔵",
-                                suggested_deadline="1 semana"
-                            )
-                            
-                            alerts.append(alert)
-            
-            logger.info(f"Gerados {len(alerts)} alertas de crescimento")
-            return alerts
-            
-        except Exception as e:
-            logger.error(f"Erro nos alertas de crescimento: {e}")
-            return []
-    
-    def _generate_oportunidade_alerts(self, df: pd.DataFrame, dataset_id: UUID) -> List[Alert]:
-        """Gerar alertas de oportunidades de cross-sell e up-sell"""
-        alerts = []
-        
-        try:
-            # Analisar oportunidades de mix de produtos
-            for client, client_data in df.groupby('client'):
-                client_products = set(client_data['sku'].unique())
-                
-                # Encontrar produtos populares que o cliente não compra
-                all_products = df['sku'].value_counts()
-                top_products = set(all_products.head(10).index)  # Top 10 produtos
-                
-                missing_products = top_products - client_products
-                
-                if missing_products and len(client_products) >= 2:  # Cliente já compra pelo menos 2 produtos
-                    # Calcular potencial baseado no perfil do cliente
-                    client_segment = client_data['segment'].iloc[0] if 'segment' in client_data.columns else None
-                    client_avg_ticket = client_data['subtotal'].mean()
-                    
-                    for missing_sku in list(missing_products)[:3]:  # Máximo 3 sugestões
-                        product_name = df[df['sku'] == missing_sku]['product'].iloc[0]
-                        
-                        # Verificar se outros clientes similares compram este produto
-                        if client_segment:
-                            segment_clients = df[df['segment'] == client_segment]['client'].unique()
-                            segment_buyers = df[(df['sku'] == missing_sku) & (df['client'].isin(segment_clients))]['client'].nunique()
-                            penetration = segment_buyers / len(segment_clients) * 100 if len(segment_clients) > 0 else 0
-                        else:
-                            penetration = 50  # Valor padrão
-                        
-                        if penetration > 30:  # Produto popular no segmento
-                            diagnosis = f"Cliente {client} não compra {product_name}, popular em seu segmento ({penetration:.1f}% dos clientes similares compram)."
-                            action = f"Oferecer {product_name} como produto complementar. Demonstrar benefícios e fazer oferta especial."
-                            
-                            alert = Alert(
-                                dataset_id=dataset_id,
-                                client=client,
-                                sku=missing_sku,
-                                type="oportunidade",
-                                diagnosis=diagnosis,
-                                recommended_action=action,
-                                reliability="🟡",
-                                suggested_deadline="2 semanas"
-                            )
-                            
-                            alerts.append(alert)
-            
-            logger.info(f"Gerados {len(alerts)} alertas de oportunidade")
-            return alerts
-            
-        except Exception as e:
-            logger.error(f"Erro nos alertas de oportunidade: {e}")
-            return []
-    
-    def _calculate_reliability(self, group: pd.DataFrame, intervals: List[int]) -> str:
-        """Calcular confiabilidade do insight baseado no histórico"""
-        try:
-            num_orders = group['order_id'].nunique()
-            cv = np.std(intervals) / np.mean(intervals) if np.mean(intervals) > 0 else 1
-            days_since_last = (self.reference_date - group['date'].max()).days
-            
-            # Critérios de confiabilidade
-            if num_orders >= 4 and cv < 0.3 and days_since_last < 45:
-                return "🔵"  # Alta confiabilidade
-            elif num_orders >= 2 and cv <= 0.5:
-                return "🟡"  # Média confiabilidade
-            else:
-                return "🔴"  # Baixa confiabilidade
-                
-        except Exception:
+            )
+        return resultados
+
+    def _queda_brusca_alerts(self, df: pd.DataFrame, dataset_id: str, segmentos) -> List[Alert]:
+        resultados: List[Alert] = []
+        df['mes'] = df['date'].dt.to_period('M')
+        mensal = df.groupby(['client', 'mes'])['subtotal'].sum().reset_index()
+
+        for client, grupo in mensal.groupby('client'):
+            if grupo.shape[0] < 3:
+                continue
+
+            grupo = grupo.sort_values('mes')
+            valores = grupo['subtotal'].values.astype(float)
+            media = valores[:-1].mean()
+            desvio = valores[:-1].std() or 1.0
+            ultimo = valores[-1]
+            z_score = (ultimo - media) / desvio
+            yoy = 0.0
+            if grupo.shape[0] >= 13:
+                yoy = ((ultimo - valores[-13]) / max(1.0, valores[-13])) * 100
+
+            if ultimo < media and z_score <= -1.5:
+                score = min(1.0, abs(z_score) / 3)
+                reliability = self._score_para_reliability(score)
+                insight = (
+                    f"Receita de {client} caiu {((media - ultimo) / max(1.0, media))*100:.1f}% vs média. "
+                    f"Z-score {z_score:.2f}, YoY {yoy:.1f}%"
+                )
+                gatilhos = segmentos.get(client)
+                action = "Planejar ação de recuperação com ofertas direcionadas e revisão de cobertura."
+                if gatilhos and gatilhos.gatilhos:
+                    action += " Verificar também: " + ", ".join(gatilhos.gatilhos)
+
+                resultados.append(
+                    Alert(
+                        dataset_id=dataset_id,
+                        client=client,
+                        sku=None,
+                        type="queda_brusca",
+                        insight=insight,
+                        action=action,
+                        reliability=reliability,
+                        suggested_deadline="1 semana",
+                    )
+                )
+        return resultados
+
+    def _outlier_volume_alerts(self, df: pd.DataFrame, dataset_id: str, segmentos) -> List[Alert]:
+        resultados: List[Alert] = []
+        for (client, sku), group in df.groupby(['client', 'sku']):
+            if group.shape[0] < 5:
+                continue
+
+            serie = group.sort_values('date').set_index('date')['qty']
+            mask = detectar_outlier_volume(serie)
+            if mask.empty or not mask.any():
+                continue
+
+            idx = mask[mask].index[-1]
+            valor = float(serie.loc[idx])
+            media = float(serie.mean())
+            direcao = "acima" if valor > media else "abaixo"
+            delta = abs(valor - media) / max(1.0, media)
+            reliability = self._score_para_reliability(min(1.0, delta))
+            cv = calcular_cv_giro(serie.diff().dropna())
+            survival = score_sobrevivencia_bayesiana([q > 0 for q in serie.tail(6)])
+
+            insight = (
+                f"Volume {direcao} da média para {sku} (último {valor:.0f} vs média {media:.0f}). "
+                f"CV giro {cv:.2f}, score sobrevivência {survival:.2f}."
+            )
+            gatilhos = segmentos.get(client)
+            action = "Validar estoque e alinhar com time de operações/atendimento."
+            if gatilhos and gatilhos.gatilhos:
+                action += " Contexto: " + ", ".join(gatilhos.gatilhos)
+
+            resultados.append(
+                Alert(
+                    dataset_id=dataset_id,
+                    client=client,
+                    sku=sku,
+                    type="outlier_volume",
+                    insight=insight,
+                    action=action,
+                    reliability=reliability,
+                    suggested_deadline="48 horas",
+                )
+            )
+        return resultados
+
+    # ------------------------------------------------------------------
+    # Utilidades
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _score_para_reliability(score: float) -> str:
+        if score >= 0.75:
             return "🔴"
+        if score >= 0.4:
+            return "🟡"
+        return "🔵"
 

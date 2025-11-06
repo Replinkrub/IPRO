@@ -2,39 +2,40 @@ from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 
 from services.database import get_db
-from services.models import Alert
 from analytics.insights import InsightsGenerator
 
 router = APIRouter()
 
-@router.post("/alerts/rico/{dataset_id}")
-async def generate_rico_alerts(dataset_id: str, db=Depends(get_db)):
-    """Gerar alertas R.I.C.O. (Ruptura, Inatividade, Crescimento, Oportunidade)"""
+
+@router.get("/alerts/rico/{dataset_id}")
+async def fetch_rico_alerts(dataset_id: str, regenerate: bool = False, db=Depends(get_db)):
+    """Retornar alertas R.I.C.O. calculados pelo motor."""
     try:
-        # Verificar se o dataset existe
         dataset = db.datasets.find_one({"_id": dataset_id})
         if not dataset:
             raise HTTPException(status_code=404, detail="Dataset não encontrado")
-        
-        # Obter transações
+
+        filtro_base = {"dataset_id": dataset_id, "type": {"$in": ["ruptura", "queda_brusca", "outlier_volume"]}}
+        if not regenerate:
+            existentes = list(db.alerts.find(filtro_base))
+            if existentes:
+                for alert in existentes:
+                    alert.pop("_id", None)
+                return existentes
+
         transactions = list(db.transactions.find({"dataset_id": dataset_id}))
         if not transactions:
             raise HTTPException(status_code=404, detail="Nenhuma transação encontrada")
-        
-        # Gerar insights
+
         generator = InsightsGenerator()
         alerts = generator.generate_rico_insights(transactions, dataset_id)
-        
-        # Salvar alertas no banco
+
+        db.alerts.delete_many(filtro_base)
         if alerts:
-            # Limpar alertas anteriores
-            db.alerts.delete_many({"dataset_id": dataset_id})
-            
-            # Inserir novos alertas
             db.alerts.insert_many([alert.dict() for alert in alerts])
-        
+
         return [alert.dict() for alert in alerts]
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro na geração de alertas: {str(e)}")
 

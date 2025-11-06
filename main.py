@@ -116,8 +116,8 @@ async def serve_static_files(path: str):
 if __name__ == "__main__":
     uvicorn.run(
         "main:app",
-        host="0.0.0.0",
-        port=5000,
+        host=os.getenv("HOST", "0.0.0.0"),
+        port=int(os.getenv("APP_PORT", os.getenv("PORT", "8000"))),
         reload=True,
         limit_request_body=104857600 # 100MB
     )

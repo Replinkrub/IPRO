@@ -56,34 +56,28 @@ uvicorn ipro.api:app --reload --host 0.0.0.0 --port 8000
 ---
 
 ## 🗝️ Variáveis (.env)
-Um `.env.example` está no repositório. Copie para `.env` e edite os valores. Chaves mais comuns:
+O arquivo `.env.example` agora é mínimo e traz somente as chaves usadas no código. Copie para `.env` e preencha os valores reais:
 
-```
-APP_NAME=ipro
-ENVIRONMENT=development   # development|staging|production
-DEBUG=false
-HOST=0.0.0.0
-PORT=8000
-LOG_LEVEL=INFO
+| Variável      | Onde é usada                                                        | Como preencher |
+|---------------|---------------------------------------------------------------------|----------------|
+| `MONGO_URL`   | `services/database.py` → cria o `MongoClient`                       | String de conexão padrão do MongoDB (`mongodb://user:pass@host:port/db`). |
+| `DB_NAME`     | `services/database.py` e `core/settings.py` → seleciona o database  | Nome do banco que armazenará datasets do IPRO. |
+| `IPRO_API_KEY`| `main.py` (/app-config.js) → entregue ao frontend para autenticação | Gere uma chave segura (GUID ou string randômica) e compartilhe com o time. |
+| `APP_PORT`    | `main.py` → porta que o Uvicorn expõe                               | Use `8000` em desenvolvimento ou outro valor conforme sua infraestrutura. |
 
-# Banco / cache (opcionais conforme sua stack)
-MONGO_URI=mongodb+srv://<user>:<pass>@<cluster>/<db>?retryWrites=true&w=majority
-MONGO_DB=ipro
-REDIS_URL=redis://localhost:6379/0
+Opcionalmente você pode definir `HOST`, `ALLOWED_ORIGINS`, `JWT_SECRET` etc. diretamente no ambiente/CI conforme a necessidade, mas eles não são obrigatórios para subir o projeto localmente.
 
-# Segurança
-SECRET_KEY=<generate_a_long_random_secret>
-JWT_SECRET=<generate_a_long_random_secret>
-JWT_EXPIRE_MINUTES=60
+> **Nunca** versione `.env`. Apenas `.env.example` permanece no Git para guiar a configuração.
 
-# CORS
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+## 🌐 Endpoints principais
 
-# Fuso
-TZ=America/Recife
-```
-
-> **Nunca** commitar `.env`. Use apenas o **`.env.example`** no Git.
+| Método & rota | Descrição |
+|---------------|-----------|
+| `POST /api/upload-batch` | Recebe múltiplos `.xlsx`, normaliza e persiste o dataset. |
+| `GET /api/dataset/{datasetId}/summary` | Retorna visão executiva (clientes, SKUs, período, mix herói). |
+| `GET /api/alerts/rico/{datasetId}` | Fornece alertas de ruptura projetada, queda brusca e outliers. |
+| `POST /api/extract/base-completa` | Upload rápido para gerar apenas a aba **Base Completa** em `.xlsx`. |
+| `GET /app-config.js` | Config dinâmico consumido pelo frontend (baseUrl, API key, JWT curto). |
 
 ---
 

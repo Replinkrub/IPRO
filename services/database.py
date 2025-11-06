@@ -25,8 +25,8 @@ class Database:
         # que o PyMongo não suporta (ver NotImplementedError em bool()).
         if self._db is not None:
             return self._db
-        mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-        db_name = os.getenv("MONGO_DB", "ipro")
+        mongo_uri = os.getenv("MONGO_URL", "mongodb://localhost:27017")
+        db_name = os.getenv("DB_NAME", "ipro")
         self._client = MongoClient(mongo_uri)
         self._db = self._client[db_name]
 
