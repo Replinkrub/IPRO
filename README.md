@@ -1,30 +1,146 @@
 # IPRO — Inteligência de Pedidos PRO
 
-Sistema focado em **padronização de dados comerciais**, **cálculo de métricas** e **insights acionáveis** para decisão de compra/venda (R.I.C.O., giro, mix, recorrência, etc.).
-Este repositório foi preparado para uso seguro em time/produção, com `.gitignore` robusto e `.env.example` documentado.
+O **IPRO** é um motor de **inteligência comercial** para pedidos B2B.
+
+Ele pega as planilhas “tortas” do CRM/ERP (produto escrito de qualquer jeito, cliente duplicado, datas e valores bagunçados), **normaliza a base**, calcula **métricas críticas de giro e comportamento** e devolve **relatórios prontos para decisão** — do representante, da indústria e do cliente final.
+
+> Não é “só um normalizador de planilhas”.  
+> A normalização é a 1ª camada. O objetivo final é **decidir melhor o próximo pedido**.
 
 ---
 
-## ✨ O que o IPRO resolve
-- **Normalização de produtos (SKU)**: extrai o **código da SKU** do início do campo *Produto* e canoniza o **nome da SKU** (descrição após o hífen).
-- **Alias & deduplicação**: mapeia códigos antigos/variantes para um **código canônico**; consolida nomes múltiplos num **nome oficial**.
-- **Cliente canônico** (quando houver): remove sufixos (LTDA/ME/EPP…), acentos e variações para agrupar o mesmo CNPJ/cliente.
-- **Métricas e insights**: base pronto para GIRO, R.I.C.O., ranking de mix, ciclo de recompra, etc.
-- **Saídas prontas**: *Excel* de apoio (base canônica, relatórios de mismatch, templates de alias/nomenclatura).
+## 1. Problema que o IPRO resolve
 
-> **Importante**: nunca faça contas com dados “quebrados”. O IPRO prioriza **validar & padronizar** antes de calcular.
+Na prática, o cenário é este:
+
+- Cada extração do CRM vem com:
+  - Produto escrito de mil jeitos diferentes.
+  - Códigos antigos misturados com códigos novos.
+  - Cliente duplicado (MATRIZ/FILIAL, LTDA/ME/EPP etc.).
+  - Datas, quantidades e valores sem padrão.
+- Com isso, fica **caro e demorado** responder perguntas simples:
+  - Qual é o giro real de cada cliente?
+  - Quem está em ruptura, inativo ou crescendo? (R.I.C.O.)
+  - Qual mix ideal por cliente?
+  - Qual o melhor pedido para fechar **agora**?
+
+O **IPRO** entra como uma pipeline única que:
+
+1. **Limpa e padroniza** o histórico de pedidos.  
+2. **Calcula métricas de giro, recorrência e mix.**  
+3. **Organiza insights em abas/relatórios prontos para ação.**
 
 ---
 
-## 🧱 Pré‑requisitos
-- **Python 3.11+** (recomendado)
-- **pip** ou **Poetry**
-- (**Opcional**) **MongoDB** e **Redis** se sua instalação usar persistência/filas
+## 2. O que o IPRO entrega (visão de produto)
+
+### 2.1. Camadas do IPRO
+
+1. **Camada de Base (Normalização)**
+   - Normalização de produtos (SKU).
+   - Alias & deduplicação de códigos.
+   - Cliente canônico.
+   - Validação numérica (`subtotal ≈ preço × quantidade`).
+
+2. **Camada de Métricas**
+   - GIRO por cliente e por SKU.
+   - Ciclo de recompra.
+   - Volume médio por pedido.
+   - Sazonalidade básica (janelas de tempo).
+   - Flags R.I.C.O. (Ruptura, Inatividade, Crescimento, Oportunidade).
+
+3. **Camada de Insights & Saídas**
+   - Relatórios em Excel com múltiplas abas.
+   - Endpoints de API (FastAPI) para integrar com sistemas externos.
+   - Base pronta para agentes de IA/automação (Replink, n8n etc.).
+
+### 2.2. Saída padrão (modelo V2)
+
+O modelo de entrega do IPRO foca em 5 blocos principais (típico arquivo Excel com 5 abas):
+
+1. **Identificação do Cliente**  
+   - Dados canônicos do cliente, cluster, perfil de compra.
+
+2. **Histórico Comercial**  
+   - Linha do tempo de pedidos, ticket médio, giro, volume por período.
+
+3. **Inteligência de Mix**  
+   - Mix atual vs. mix potencial.  
+   - Produtos centrais, ocasionais e oportunidades de encaixe.
+
+4. **Relacional e Atendimento**  
+   - Ciclos de visita, janelas de pedido, descolamento entre “momento ideal” e “momento real”.
+
+5. **Inteligência Comportamental**  
+   - Flags R.I.C.O., padrão de recorrência, variação de volume e sinais de risco.
+
+> A camada de normalização é o “motor”.  
+> Essas abas são o **produto final** que o usuário de negócio enxerga.
+
+---
+
+## 3. Estado atual do projeto
+
+Para evitar confusão, o IPRO é organizado em **estado atual** vs. **roadmap**:
+
+### 3.1. Implementado (em desenvolvimento contínuo)
+
+- ✅ Estrutura de projeto em Python (pastas `core/`, `analytics/`, `services/`, `routers/`, `src/`).
+- ✅ Normalização de produtos (SKU) a partir da coluna “Produto”.
+- ✅ Regras para alias de código e nome canônico via arquivos de calibração.
+- ✅ Cliente canônico (limpeza de sufixos, acentos, variações).
+- ✅ Validações de consistência numérica básicas.
+- ✅ Setup com `.env.example`, `.gitignore`, Dockerfile e docker-compose.
+
+### 3.2. Em construção / planejado
+
+- ⏳ Cálculo consolidado de GIRO por cliente/SKU.  
+- ⏳ Flags R.I.C.O. com parâmetros configuráveis.  
+- ⏳ Geração automática das 5 abas padrão de saída.  
+- ⏳ API `/process` recebendo Excel e devolvendo arquivos processados.  
+
+> O repositório acompanha esse roadmap.  
+> À medida que as features são implementadas, esta seção é atualizada.
+
+---
+
+## 4. Arquitetura do projeto
+
+Visão geral das principais pastas:
+
+- `core/`  
+  Lógica de base: parsers, normalização de SKU, cliente canônico, leitura de calibrações.
+
+- `analytics/`  
+  Cálculo de métricas (giro, ciclos, indicadores de comportamento) e geração de DataFrames prontos para relatórios.
+
+- `services/`  
+  Serviços de infraestrutura (banco, cache, filas, etc.), quando usados.
+
+- `routers/`  
+  Rotas da API (FastAPI), como `/health`, `/process`, etc.
+
+- `src/`  
+  Código de suporte, utilitários, entrypoints específicos.
+
+- `main.py`  
+  Ponto de entrada da aplicação (ex.: instancia a API).
+
+- `Dockerfile` / `docker-compose.yml`  
+  Arquivos para rodar o IPRO em containers.
+
+---
+
+## 5. Pré-requisitos
+
+- Python **3.11+** (recomendado)  
+- `pip` ou **Poetry**  
+- (Opcional) **MongoDB** e **Redis**, se sua instalação usar persistência/filas  
 - Windows, macOS ou Linux
 
 ---
 
-## ⚙️ Setup rápido (Windows / PowerShell)
+## 6. Setup rápido (Windows / PowerShell)
 
 ```powershell
 # 1) Clone o repositório
@@ -49,9 +165,9 @@ Copy-Item .env.example .env
 # 4) (Opcional) rode a API se existir um app FastAPI
 # ajuste o módulo conforme o projeto (ex.: ipro.api:app ou ipro.main:app)
 uvicorn ipro.api:app --reload --host 0.0.0.0 --port 8000
-```
+7. Variáveis de ambiente (.env)
 
-> No Linux/macOS, use `source .venv/bin/activate` para ativar o venv.
+Um .env.example está no repositório. Copie para .env e edite os valores.
 
 ---
 
@@ -78,116 +194,173 @@ Opcionalmente você pode definir `HOST`, `ALLOWED_ORIGINS`, `JWT_SECRET` etc. di
 | `GET /api/alerts/rico/{datasetId}` | Fornece alertas de ruptura projetada, queda brusca e outliers. |
 | `POST /api/extract/base-completa` | Upload rápido para gerar apenas a aba **Base Completa** em `.xlsx`. |
 | `GET /app-config.js` | Config dinâmico consumido pelo frontend (baseUrl, API key, JWT curto). |
+APP_NAME=ipro
+ENVIRONMENT=development   # development|staging|production
+DEBUG=false
+HOST=0.0.0.0
+PORT=8000
+LOG_LEVEL=INFO
 
----
+# Banco / cache (opcionais conforme sua stack)
+MONGO_URI=mongodb+srv://<user>:<pass>@<cluster>/<db>?retryWrites=true&w=majority
+MONGO_DB=ipro
+REDIS_URL=redis://localhost:6379/0
 
-## 🧼 Regras de normalização de SKU / Produto
+# Segurança
+SECRET_KEY=<generate_a_long_random_secret>
+JWT_SECRET=<generate_a_long_random_secret>
+JWT_EXPIRE_MINUTES=60
 
-### 1) Extração do **código da SKU**
-- O **código da SKU** é o número que **precede o hífen** no campo *Produto*.
-- Padrões válidos reconhecidos:
-  - `NN.NN.NNN.NNNN` (ex.: `20.07.001.0001`)
-  - `NN.NNNN` (ex.: `01.3016`)
-  - Somente dígitos longos (ex.: `2007001000`) → convertível para pontuado se bater com os grupos.
-- Ex.:  
-  `01.1448 - Garfo p/ Churrasco G 45 INOX`  
-  → **SKU_CODE_CANON = `01.1448`**  
-  → **SKU_NAME_CANON = `Garfo p/ Churrasco G 45 INOX`**
+# CORS
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 
-### 2) Alias de código (equivalências)
-- Códigos históricos/compactos/variantes (ex.: `2007001000`) devem apontar para **um código canônico** (ex.: `20.07.001.0001`).
+# Fuso
+TZ=America/Recife
 
-### 3) Nome canônico (descrição)
-- Várias descrições para o mesmo código → **escolher 1 nome oficial** (curto, claro, com gramatura quando aplicável).
-- Um mesmo nome em **vários códigos** → decidir se é:
-  - **Mudança cadastral** (antigo/novo) ⇒ manter 1 **ativo** e mapear os demais como **alias** ou **descontinuados**;
-  - **SKU distintos** (ex.: gramatura/sabor) ⇒ **diferenciar no nome** (e.g., “300G” vs “200G”).
 
-### 4) Cliente canônico (quando houver coluna de cliente)
-- Remover sufixos (`LTDA`, `ME`, `EPP`, `MATRIZ`, `FILIAL`…), acentos e espaços duplicados.
-- Sugerir mesclagens com fuzzy‑match (similaridade ≥ **0,92**).
+Nunca commitar .env. Use apenas o .env.example no Git.
 
----
+8. Motor de normalização (Base do IPRO)
+8.1. Extração do código da SKU
 
-## 🗂️ Templates de calibração (para acerto fino)
-> **Onde colocar**: crie a pasta `calibration/` na raiz do projeto e salve lá.
+O código da SKU é o número que precede o hífen no campo Produto.
 
-- **`calibration/sku_alias.csv`**  
-  Mapeia códigos observados → **código canônico**.  
-  **Colunas**: `observed_code,canon_code,notes`  
-  Ex.:  
-  ```csv
-  2007001000,20.07.001.0001,formato compacto convertido
-  11FAROFACO,11,alias textual antigo
-  ```
+Padrões válidos reconhecidos:
 
-- **`calibration/sku_name_canon.csv`**  
-  Define **o nome oficial** por código.  
-  **Colunas**: `canon_code,canon_name`  
-  Ex.:  
-  ```csv
-  20.07.001.0001,FAROFA TRADICIONAL CROCANTE 300G
-  20.07.001.0002,FAROFA DE COSTELA CROCANTE 300G
-  01.1448,GARFO P/ CHURRASCO G 45 INOX
-  ```
+NN.NN.NNN.NNNN (ex.: 20.07.001.0001)
 
-- **`calibration/client_canon.csv`** *(opcional)*  
-  **Colunas**: `original,canon` (quando quiser forçar merges de clientes).
+NN.NNNN (ex.: 01.3016)
 
-> Esses arquivos são **lidos antes dos cálculos** para garantir que tudo esteja uniforme.
+Somente dígitos longos (ex.: 2007001000) → convertível para pontuado se bater com os grupos.
 
----
+Exemplo:
 
-## ▶️ Como rodar (exemplos)
+01.1448 - Garfo p/ Churrasco G 45 INOX
+→ SKU_CODE_CANON = 01.1448
+→ SKU_NAME_CANON = Garfo p/ Churrasco G 45 INOX
 
-### A) Normalização offline (Excel → Excel)
+8.2. Alias de código (equivalências)
+
+Códigos históricos/compactos/variantes (ex.: 2007001000) apontam para um código canônico (ex.: 20.07.001.0001).
+
+8.3. Nome canônico (descrição)
+
+Várias descrições para o mesmo código → escolher 1 nome oficial (curto, claro, com gramatura quando aplicável).
+
+Um mesmo nome em vários códigos → decidir se é:
+
+Mudança cadastral (antigo/novo) ⇒ manter 1 ativo e mapear os demais como alias/descontinuados.
+
+SKUs distintos (ex.: gramatura/sabor) ⇒ diferenciar no nome (ex.: “300G” vs “200G”).
+
+8.4. Cliente canônico (quando houver coluna de cliente)
+
+Remover sufixos (LTDA, ME, EPP, MATRIZ, FILIAL…), acentos e espaços duplicados.
+
+Sugerir mesclagens com fuzzy-match (similaridade ≥ 0,92), quando implementado.
+
+9. Templates de calibração (acerto fino)
+
+Onde colocar: crie a pasta calibration/ na raiz do projeto.
+
+9.1. calibration/sku_alias.csv
+
+Mapeia códigos observados → código canônico.
+
+Colunas: observed_code,canon_code,notes
+
+2007001000,20.07.001.0001,formato compacto convertido
+11FAROFACO,11,alias textual antigo
+
+9.2. calibration/sku_name_canon.csv
+
+Define o nome oficial por código.
+
+Colunas: canon_code,canon_name
+
+20.07.001.0001,FAROFA TRADICIONAL CROCANTE 300G
+20.07.001.0002,FAROFA DE COSTELA CROCANTE 300G
+01.1448,GARFO P/ CHURRASCO G 45 INOX
+
+9.3. calibration/client_canon.csv (opcional)
+
+Colunas: original,canon
+Quando quiser forçar merges de clientes específicos.
+
+Esses arquivos são lidos antes dos cálculos para garantir que tudo esteja uniforme.
+
+10. Como rodar (exemplos)
+10.1. Normalização offline (Excel → Excel)
+
 Supondo um módulo de normalização (ajuste o caminho conforme seu projeto):
-```bash
+
 python -m ipro.tools.normalize \
   --input data/raw/IPRO_Export_2025-09-30.xlsx \
   --out outputs/Base_Normalizada.xlsx \
   --alias calibration/sku_alias.csv \
   --names calibration/sku_name_canon.csv \
   --clients calibration/client_canon.csv
-```
 
-### B) API (se o projeto expõe FastAPI)
-```bash
+10.2. API (se o projeto expõe FastAPI)
 uvicorn ipro.api:app --host 0.0.0.0 --port 8000 --reload
 # GET  /health
-# POST /process  (envia arquivo .xlsx e recebe base normalizada/insights)
-```
+# POST /process   (envia arquivo .xlsx e recebe base normalizada/insights)
 
-> **Dica**: mantenha `outputs/` e `data/raw/` fora do Git (já coberto pelo `.gitignore`).
 
----
+Dica: mantenha outputs/ e data/raw/ fora do Git (já coberto pelo .gitignore).
 
-## 🧪 Qualidade
-- Validações: `SKU ↔ Produto`, numéricos em pt‑BR (`,` como decimal), `subtotal≈preço×qtd` (tolerância 1%).
-- Testes unitários (sugestão): extração de SKU, canon de nome, canon de cliente, parser numérico.
+11. Qualidade
 
----
+Validações: SKU ↔ Produto, numéricos em pt-BR (, como decimal), subtotal ≈ preço × qtd (tolerância ~1%).
 
-## 🧹 Git & Segurança
-- `.env` **nunca** vai para o repositório. Use apenas `.env.example`.
-- `.gitignore` já cobre: caches Python, `.venv`, Excel/CSV, builds, node_modules, etc.
-- Proteja a branch `main` no GitHub (opcional).
+Testes unitários recomendados:
 
----
+Extração de SKU.
 
-## 🆘 Troubleshooting
-- **“git não é reconhecido”**: reabra o terminal ou use `C:\Program Files\Git\cmd\git.exe`.  
-- **`uvicorn` não encontrado**: `pip install uvicorn fastapi` (ou use Poetry).  
-- **Erro de locale/decimal** ao ler Excel: normalize vírgula/ponto antes de converter para número.  
-- **CORS** em dev: ajuste `ALLOWED_ORIGINS` no `.env`.  
-- **Timezone**: `TZ=America/Recife` no `.env` ou configure no sistema.
+Nome canônico.
 
----
+Cliente canônico.
 
-## 📄 Licença
-Uso interno. Defina a licença conforme a política da organização.
+Parser numérico de valores em pt-BR.
 
----
+12. Git & Segurança
 
-## ✍️ Créditos
-IPRO — pipeline de **Inteligência de Pedidos**.
+.env nunca vai para o repositório. Use apenas .env.example.
+
+.gitignore cobre:
+
+caches do Python, .venv, Excel/CSV, builds, node_modules etc.
+
+Recomenda-se proteger a branch main no GitHub.
+
+13. Troubleshooting
+
+"git" não é reconhecido
+
+Reabra o terminal ou use C:\Program Files\Git\cmd\git.exe.
+
+uvicorn não encontrado
+
+pip install uvicorn fastapi (ou use Poetry).
+
+Erro de locale/decimal ao ler Excel
+
+Normalize vírgula/ponto antes de converter para número.
+
+CORS em dev
+
+Ajuste ALLOWED_ORIGINS no .env.
+
+Timezone
+
+TZ=America/Recife no .env ou configure no sistema.
+
+14. Licença
+
+Uso interno.
+Defina a licença conforme a política da organização antes de tornar o repositório público.
+
+15. Créditos
+
+IPRO — Inteligência de Pedidos PRO.
+Pipeline de dados criado para dar visão de giro, mix e comportamento de compra em operações B2B.
