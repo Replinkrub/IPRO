@@ -169,6 +169,31 @@ uvicorn ipro.api:app --reload --host 0.0.0.0 --port 8000
 
 Um .env.example está no repositório. Copie para .env e edite os valores.
 
+---
+
+## 🗝️ Variáveis (.env)
+O arquivo `.env.example` agora é mínimo e traz somente as chaves usadas no código. Copie para `.env` e preencha os valores reais:
+
+| Variável      | Onde é usada                                                        | Como preencher |
+|---------------|---------------------------------------------------------------------|----------------|
+| `MONGO_URL`   | `services/database.py` → cria o `MongoClient`                       | String de conexão padrão do MongoDB (`mongodb://user:pass@host:port/db`). |
+| `DB_NAME`     | `services/database.py` e `core/settings.py` → seleciona o database  | Nome do banco que armazenará datasets do IPRO. |
+| `IPRO_API_KEY`| `main.py` (/app-config.js) → entregue ao frontend para autenticação | Gere uma chave segura (GUID ou string randômica) e compartilhe com o time. |
+| `APP_PORT`    | `main.py` → porta que o Uvicorn expõe                               | Use `8000` em desenvolvimento ou outro valor conforme sua infraestrutura. |
+
+Opcionalmente você pode definir `HOST`, `ALLOWED_ORIGINS`, `JWT_SECRET` etc. diretamente no ambiente/CI conforme a necessidade, mas eles não são obrigatórios para subir o projeto localmente.
+
+> **Nunca** versione `.env`. Apenas `.env.example` permanece no Git para guiar a configuração.
+
+## 🌐 Endpoints principais
+
+| Método & rota | Descrição |
+|---------------|-----------|
+| `POST /api/upload-batch` | Recebe múltiplos `.xlsx`, normaliza e persiste o dataset. |
+| `GET /api/dataset/{datasetId}/summary` | Retorna visão executiva (clientes, SKUs, período, mix herói). |
+| `GET /api/alerts/rico/{datasetId}` | Fornece alertas de ruptura projetada, queda brusca e outliers. |
+| `POST /api/extract/base-completa` | Upload rápido para gerar apenas a aba **Base Completa** em `.xlsx`. |
+| `GET /app-config.js` | Config dinâmico consumido pelo frontend (baseUrl, API key, JWT curto). |
 APP_NAME=ipro
 ENVIRONMENT=development   # development|staging|production
 DEBUG=false

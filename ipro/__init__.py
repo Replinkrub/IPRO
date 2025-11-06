@@ -1,0 +1,1 @@
+"""Pacote IPRO utilitário."""
