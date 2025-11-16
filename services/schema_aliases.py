@@ -1,23 +1,24 @@
 TX_ALIASES = {
-  "date": {"data_emissao","emissao","data","dt","data_venda"},
-  "order_id": {"pedido","order","n_pedido","doc"},
-  "client": {"cliente","razao_social","nome_fantasia"},
-  "seller": {"criador","vendedor","representante"},
-  "price": {"preco","preco_liquido","valor_unit","vl_unit"},
-  "qty": {"quantidade","qtd","qde","qtde","quant"},
-  "subtotal": {"total","vl_total","valor_total"},
-  "product": {"produto","item","descricao"},
-  "sku": {"sku","codigo","cod_prod"},
-  "uf": {"uf","estado","sigla_uf"}
+    "date": {"data_emissao", "emissao", "data", "dt", "data_venda"},
+    "order_id": {"pedido", "order", "n_pedido", "doc"},
+    "client": {"cliente", "razao_social", "nome_fantasia"},
+    "seller": {"criador", "vendedor", "representante"},
+    "price": {"preco", "preco_liquido", "valor_unit", "vl_unit"},
+    "qty": {"quantidade", "qtd", "qde", "qtde", "quant"},
+    "subtotal": {"total", "vl_total", "valor_total"},
+    "product": {"produto", "item", "descricao"},
+    "sku": {"sku", "codigo", "cod_prod"},
+    "uf": {"uf", "estado", "sigla_uf"},
 }
 
 CUSTOMER_ALIASES = {
-  "client": {"cliente","razao_social","nome_fantasia","cliente_nome"},
-  "cnpj": {"cnpj"},
-  "ie": {"insc._estadual","insc_estadual"},
-  "uf": {"uf","estado","sigla_uf"},
-  "city": {"cidade"}
+    "client": {"cliente", "razao_social", "nome_fantasia", "cliente_nome"},
+    "cnpj": {"cnpj"},
+    "ie": {"insc._estadual", "insc_estadual"},
+    "uf": {"uf", "estado", "sigla_uf"},
+    "city": {"cidade"},
 }
+
 
 def apply_aliases(df, aliases: dict):
     """
@@ -61,4 +62,3 @@ def apply_aliases(df, aliases: dict):
         # Copiar apenas se a coluna original existir
         df[canon] = df[src]
     return df
-
