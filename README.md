@@ -83,7 +83,7 @@ O modelo de entrega do IPRO foca em 5 blocos principais (típico arquivo Excel c
 
 Para evitar confusão, o IPRO é organizado em **estado atual** vs. **roadmap**:
 
-### 3.1. Implementado (em desenvolvimento contínuo)
+-### 3.1. Implementado (em desenvolvimento contínuo)
 
 - ✅ Estrutura de projeto em Python (pastas `core/`, `analytics/`, `services/`, `routers/`, `src/`).
 - ✅ Normalização de produtos (SKU) a partir da coluna “Produto”.
@@ -91,15 +91,14 @@ Para evitar confusão, o IPRO é organizado em **estado atual** vs. **roadmap**:
 - ✅ Cliente canônico (limpeza de sufixos, acentos, variações).
 - ✅ Validações de consistência numérica básicas.
 - ✅ Setup com `.env.example`, `.gitignore`, Dockerfile e docker-compose.
+- ✅ Endpoint `/api/process` gerando automaticamente o Excel final com as 5 abas do IPRO.
 
 ### 3.2. Em construção / planejado
 
-- ⏳ Cálculo consolidado de GIRO por cliente/SKU.  
-- ⏳ Flags R.I.C.O. com parâmetros configuráveis.  
-- ⏳ Geração automática das 5 abas padrão de saída.  
-- ⏳ API `/process` recebendo Excel e devolvendo arquivos processados.  
+- ⏳ Cálculo consolidado de GIRO por cliente/SKU.
+- ⏳ Flags R.I.C.O. com parâmetros configuráveis.
 
-> O repositório acompanha esse roadmap.  
+> O repositório acompanha esse roadmap.
 > À medida que as features são implementadas, esta seção é atualizada.
 
 ---
@@ -118,7 +117,7 @@ Visão geral das principais pastas:
   Serviços de infraestrutura (banco, cache, filas, etc.), quando usados.
 
 - `routers/`  
-  Rotas da API (FastAPI), como `/health`, `/process`, etc.
+  Rotas da API (FastAPI), como `/health`, `/api/process`, etc.
 
 - `src/`  
   Código de suporte, utilitários, entrypoints específicos.
@@ -190,6 +189,7 @@ Opcionalmente você pode definir `HOST`, `ALLOWED_ORIGINS`, `JWT_SECRET` etc. di
 | Método & rota | Descrição |
 |---------------|-----------|
 | `POST /api/upload-batch` | Recebe múltiplos `.xlsx`, normaliza e persiste o dataset. |
+| `POST /api/process` | Upload único e retorno imediato de um `.xlsx` com as 5 abas (cliente, histórico, mix, relacional e comportamental). |
 | `GET /api/dataset/{datasetId}/summary` | Retorna visão executiva (clientes, SKUs, período, mix herói). |
 | `GET /api/alerts/rico/{datasetId}` | Fornece alertas de ruptura projetada, queda brusca e outliers. |
 | `POST /api/extract/base-completa` | Upload rápido para gerar apenas a aba **Base Completa** em `.xlsx`. |
@@ -304,7 +304,7 @@ python -m ipro.tools.normalize \
 10.2. API (se o projeto expõe FastAPI)
 uvicorn ipro.api:app --host 0.0.0.0 --port 8000 --reload
 # GET  /health
-# POST /process   (envia arquivo .xlsx e recebe base normalizada/insights)
+# POST /api/process   (envia arquivo .xlsx e recebe Excel final com 5 abas)
 
 
 Dica: mantenha outputs/ e data/raw/ fora do Git (já coberto pelo .gitignore).
