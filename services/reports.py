@@ -93,6 +93,7 @@ class ProReportBuilder:
             sheet.set_column(idx, idx, width, fmt_currency if col == 'subtotal' else None)
 
     def _write_insights(self, df: pd.DataFrame, writer, fmt_header, fmt_text):
+        """Export actionable insights ensuring legacy schema compatibility."""
         sheet_name = "Insights_Acionaveis"
 
         if df.empty:
