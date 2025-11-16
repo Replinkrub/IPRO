@@ -138,9 +138,17 @@ def write_report_excel(dataframes: Dict[str, pd.DataFrame], engine: str = 'xlsxw
     tmp.close()
 
     def _write(path: str, selected_engine: str):
+        def _strip_tz(df: pd.DataFrame) -> pd.DataFrame:
+            df = df.copy()
+            for col in df.columns:
+                if pd.api.types.is_datetime64tz_dtype(df[col]):
+                    df[col] = df[col].dt.tz_localize(None)
+            return df
+
         with pd.ExcelWriter(path, engine=selected_engine) as writer:
             for sheet_name, df in dataframes.items():
-                df.to_excel(writer, sheet_name=sheet_name[:31], index=False)
+                clean_df = _strip_tz(df)
+                clean_df.to_excel(writer, sheet_name=sheet_name[:31], index=False)
 
     try:
         _write(tmp_path, engine)
