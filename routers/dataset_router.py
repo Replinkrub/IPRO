@@ -1,6 +1,14 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Request
+from fastapi import (
+    APIRouter,
+    UploadFile,
+    File,
+    HTTPException,
+    Depends,
+    Request,
+    BackgroundTasks,
+)
 from fastapi.responses import FileResponse
-from typing import List
+from typing import List, Optional
 import hashlib
 import os
 import tempfile
@@ -20,6 +28,12 @@ from services.validator import DataValidator
 from services.normalizer import DataNormalizer
 from decimal import Decimal
 from pymongo.errors import BulkWriteError, DuplicateKeyError
+from services.report_builder import (
+    build_report_dataframes,
+    convert_transactions_to_records,
+    safe_remove,
+    write_report_excel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +196,73 @@ async def upload_batch(request: Request, files: List[UploadFile] = File(...), db
             "$set": {"status": "FAILED", "error": str(e), "finished_at": utc_now()}
         })
         raise HTTPException(status_code=500, detail=f"Erro no processamento: {str(e)}")
+
+
+@router.post("/process")
+async def process_single_file(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db=Depends(get_db),
+):
+    """Processar um único arquivo Excel e devolver o consolidado com 5 abas."""
+
+    _ = db  # força inicialização da conexão para reutilizar cadastros
+    if not file.filename.lower().endswith('.xlsx'):
+        raise HTTPException(status_code=400, detail="Envie um arquivo .xlsx válido")
+
+    extractor = DataExtractor()
+    validator = DataValidator()
+    normalizer = DataNormalizer()
+    dataset_id = str(uuid4())
+    tmp_input_path: Optional[str] = None
+
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp_in:
+            tmp_input_path = tmp_in.name
+            content = await file.read()
+            if not content:
+                raise HTTPException(status_code=400, detail="Arquivo enviado está vazio")
+            tmp_in.write(content)
+            tmp_in.flush()
+
+        raw_transactions = extractor.extract_transactions(tmp_input_path)
+    finally:
+        if tmp_input_path and os.path.exists(tmp_input_path):
+            safe_remove(tmp_input_path)
+
+    if not raw_transactions:
+        raise HTTPException(status_code=400, detail="Nenhuma transação válida foi encontrada no arquivo")
+
+    validated = validator.validate_transactions(raw_transactions)
+    normalized = normalizer.normalize_transactions(validated, dataset_id)
+
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Não foi possível normalizar os dados enviados")
+
+    normalized_records = convert_transactions_to_records(normalized)
+
+    try:
+        dataframes = build_report_dataframes(normalized_records, dataset_id, calculator=MetricsCalculator())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.error("Falha ao gerar abas consolidadas", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao consolidar métricas: {exc}")
+
+    try:
+        export_path = write_report_excel(dataframes)
+    except Exception as exc:
+        logger.error("Falha ao gerar Excel consolidado", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar arquivo final: {exc}")
+
+    filename = f"IPRO_{dataset_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    background_tasks.add_task(safe_remove, export_path)
+    return FileResponse(
+        export_path,
+        filename=filename,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        background=background_tasks,
+    )
 
 
 @router.post("/extract/base-completa")
