@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from uuid import UUID, uuid4
+from uuid import uuid4
 from decimal import Decimal
 
 class Dataset(BaseModel):
