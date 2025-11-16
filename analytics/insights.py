@@ -80,9 +80,14 @@ class InsightsGenerator:
                 f"Giro mediano {giro_mediano:.1f}d (IC {ic_low:.0f}-{ic_high:.0f}) e prob. recompra {prob_recompra*100:.0f}%."
             )
             gatilhos = segmentos.get(client)
-            action = "Contatar cliente e reservar estoque para reposição imediata."
+            diagnosis = (
+                f"{client} está há {dias_sem_compra}d sem comprar {sku} (giro {giro_mediano:.0f}d)."
+            )
+            recommended_action = (
+                f"Ligar para {client} e reservar estoque para reposição em até 3 dias."
+            )
             if gatilhos and gatilhos.gatilhos:
-                action += " Triggers: " + ", ".join(gatilhos.gatilhos)
+                recommended_action += " Considerar: " + ", ".join(gatilhos.gatilhos)
 
             resultados.append(
                 Alert(
@@ -91,7 +96,9 @@ class InsightsGenerator:
                     sku=sku,
                     type="ruptura",
                     insight=insight,
-                    action=action,
+                    action=recommended_action,
+                    diagnosis=diagnosis,
+                    recommended_action=recommended_action,
                     reliability=reliability,
                     suggested_deadline="3 dias",
                 )
@@ -121,14 +128,20 @@ class InsightsGenerator:
             if ultimo < media and z_score <= -1.5:
                 score = min(1.0, abs(z_score) / 3)
                 reliability = self._score_para_reliability(score)
+                queda_pct = ((media - ultimo) / max(1.0, media)) * 100
                 insight = (
-                    f"Receita de {client} caiu {((media - ultimo) / max(1.0, media))*100:.1f}% vs média. "
+                    f"Receita de {client} caiu {queda_pct:.1f}% vs média. "
                     f"Z-score {z_score:.2f}, YoY {yoy:.1f}%"
                 )
                 gatilhos = segmentos.get(client)
-                action = "Planejar ação de recuperação com ofertas direcionadas e revisão de cobertura."
+                diagnosis = (
+                    f"Receita mensal de {client} recuou {queda_pct:.1f}% (z {z_score:.1f})."
+                )
+                recommended_action = (
+                    "Oferecer ofertas de recuperação e revisar cobertura com o time comercial."
+                )
                 if gatilhos and gatilhos.gatilhos:
-                    action += " Verificar também: " + ", ".join(gatilhos.gatilhos)
+                    recommended_action += " Verificar também: " + ", ".join(gatilhos.gatilhos)
 
                 resultados.append(
                     Alert(
@@ -137,7 +150,9 @@ class InsightsGenerator:
                         sku=None,
                         type="queda_brusca",
                         insight=insight,
-                        action=action,
+                        action=recommended_action,
+                        diagnosis=diagnosis,
+                        recommended_action=recommended_action,
                         reliability=reliability,
                         suggested_deadline="1 semana",
                     )
@@ -170,9 +185,15 @@ class InsightsGenerator:
                 f"CV giro {cv:.2f}, score sobrevivência {survival:.2f}."
             )
             gatilhos = segmentos.get(client)
-            action = "Validar estoque e alinhar com time de operações/atendimento."
+            variacao_pct = delta * 100
+            diagnosis = (
+                f"Volume de {sku} ficou {direcao} {variacao_pct:.0f}% vs média ({valor:.0f} vs {media:.0f})."
+            )
+            recommended_action = (
+                "Agendar validação de estoque e alinhar com operações/atendimento."
+            )
             if gatilhos and gatilhos.gatilhos:
-                action += " Contexto: " + ", ".join(gatilhos.gatilhos)
+                recommended_action += " Contexto: " + ", ".join(gatilhos.gatilhos)
 
             resultados.append(
                 Alert(
@@ -181,7 +202,9 @@ class InsightsGenerator:
                     sku=sku,
                     type="outlier_volume",
                     insight=insight,
-                    action=action,
+                    action=recommended_action,
+                    diagnosis=diagnosis,
+                    recommended_action=recommended_action,
                     reliability=reliability,
                     suggested_deadline="48 horas",
                 )
