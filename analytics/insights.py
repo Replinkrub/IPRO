@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable, List
+from typing import Dict, Iterable, List
 
 import numpy as np
 import pandas as pd
@@ -40,10 +40,12 @@ class InsightsGenerator:
 
         segmentos = {seg.client: seg for seg in self.segmentador.avaliar(df.to_dict('records'))}
 
+        dataset_id_str = str(dataset_id)
+
         alerts: List[Alert] = []
-        alerts.extend(self._ruptura_alerts(df, dataset_id, segmentos))
-        alerts.extend(self._queda_brusca_alerts(df, dataset_id, segmentos))
-        alerts.extend(self._outlier_volume_alerts(df, dataset_id, segmentos))
+        alerts.extend(self._ruptura_alerts(df, dataset_id_str, segmentos))
+        alerts.extend(self._queda_brusca_alerts(df, dataset_id_str, segmentos))
+        alerts.extend(self._outlier_volume_alerts(df, dataset_id_str, segmentos))
         return alerts
 
     # ------------------------------------------------------------------
@@ -51,6 +53,7 @@ class InsightsGenerator:
     # ------------------------------------------------------------------
     def _ruptura_alerts(self, df: pd.DataFrame, dataset_id: str, segmentos) -> List[Alert]:
         resultados: List[Alert] = []
+        dataset_id_str = str(dataset_id)
         for (client, sku), group in df.groupby(['client', 'sku']):
             if group.shape[0] < 2:
                 continue
@@ -82,7 +85,7 @@ class InsightsGenerator:
 
             resultados.append(
                 Alert(
-                    dataset_id=dataset_id,
+                    dataset_id=dataset_id_str,
                     client=client,
                     sku=sku,
                     type="ruptura",
@@ -96,6 +99,7 @@ class InsightsGenerator:
 
     def _queda_brusca_alerts(self, df: pd.DataFrame, dataset_id: str, segmentos) -> List[Alert]:
         resultados: List[Alert] = []
+        dataset_id_str = str(dataset_id)
         df['mes'] = df['date'].dt.to_period('M')
         mensal = df.groupby(['client', 'mes'])['subtotal'].sum().reset_index()
 
@@ -127,7 +131,7 @@ class InsightsGenerator:
 
                 resultados.append(
                     Alert(
-                        dataset_id=dataset_id,
+                        dataset_id=dataset_id_str,
                         client=client,
                         sku=None,
                         type="queda_brusca",
@@ -141,6 +145,7 @@ class InsightsGenerator:
 
     def _outlier_volume_alerts(self, df: pd.DataFrame, dataset_id: str, segmentos) -> List[Alert]:
         resultados: List[Alert] = []
+        dataset_id_str = str(dataset_id)
         for (client, sku), group in df.groupby(['client', 'sku']):
             if group.shape[0] < 5:
                 continue
@@ -170,7 +175,7 @@ class InsightsGenerator:
 
             resultados.append(
                 Alert(
-                    dataset_id=dataset_id,
+                    dataset_id=dataset_id_str,
                     client=client,
                     sku=sku,
                     type="outlier_volume",
