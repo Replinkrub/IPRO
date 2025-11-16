@@ -21,6 +21,7 @@ class MetricsCalculator:
     # Clientes
     # ------------------------------------------------------------------
     def calculate_customer_rfm(self, transactions: Iterable[Dict], dataset_id: str) -> List[CustomerAnalytics]:
+        dataset_id_str = str(dataset_id)
         df = pd.DataFrame(list(transactions))
         if df.empty:
             return []
@@ -43,7 +44,7 @@ class MetricsCalculator:
 
             resultados.append(
                 {
-                    'dataset_id': dataset_id,
+                    'dataset_id': dataset_id_str,
                     'client': client,
                     'recency': recency,
                     'frequency': frequency,
@@ -84,6 +85,7 @@ class MetricsCalculator:
     # Produtos
     # ------------------------------------------------------------------
     def calculate_product_analytics(self, transactions: Iterable[Dict], dataset_id: str) -> List[ProductAnalytics]:
+        dataset_id_str = str(dataset_id)
         df = pd.DataFrame(list(transactions))
         if df.empty:
             return []
@@ -123,7 +125,7 @@ class MetricsCalculator:
             produto = grupo.iloc[0].get('product') or sku
             resultados.append(
                 ProductAnalytics(
-                    dataset_id=dataset_id,
+                    dataset_id=dataset_id_str,
                     sku=sku,
                     product=produto,
                     orders=orders,
