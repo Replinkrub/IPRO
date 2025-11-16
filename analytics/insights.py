@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Iterable, List
+from typing import Dict, Iterable, List
 
 import numpy as np
 import pandas as pd
@@ -30,6 +30,7 @@ class InsightsGenerator:
     # API pública
     # ------------------------------------------------------------------
     def generate_rico_insights(self, transactions: Iterable[Dict], dataset_id: str) -> List[Alert]:
+        dataset_id_str = str(dataset_id)
         df = pd.DataFrame(list(transactions))
         if df.empty:
             return []
@@ -41,9 +42,9 @@ class InsightsGenerator:
         segmentos = {seg.client: seg for seg in self.segmentador.avaliar(df.to_dict('records'))}
 
         alerts: List[Alert] = []
-        alerts.extend(self._ruptura_alerts(df, dataset_id, segmentos))
-        alerts.extend(self._queda_brusca_alerts(df, dataset_id, segmentos))
-        alerts.extend(self._outlier_volume_alerts(df, dataset_id, segmentos))
+        alerts.extend(self._ruptura_alerts(df, dataset_id_str, segmentos))
+        alerts.extend(self._queda_brusca_alerts(df, dataset_id_str, segmentos))
+        alerts.extend(self._outlier_volume_alerts(df, dataset_id_str, segmentos))
         return alerts
 
     # ------------------------------------------------------------------
