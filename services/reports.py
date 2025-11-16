@@ -93,17 +93,50 @@ class ProReportBuilder:
             sheet.set_column(idx, idx, width, fmt_currency if col == 'subtotal' else None)
 
     def _write_insights(self, df: pd.DataFrame, writer, fmt_header, fmt_text):
-        sheet_name = 'Insights_Acionaveis'
+        """Export actionable insights ensuring legacy schema compatibility."""
+        sheet_name = "Insights_Acionaveis"
+
         if df.empty:
-            insights = pd.DataFrame(columns=['client', 'type', 'insight', 'action', 'reliability', 'suggested_deadline'])
+            insights = pd.DataFrame(
+                columns=["client", "type", "insight", "action", "reliability", "suggested_deadline"]
+            )
         else:
-            insights = df[['client', 'type', 'insight', 'action', 'reliability', 'suggested_deadline']].copy()
+            df = df.copy()
+
+            # Compatibilidade com schema antigo (diagnosis / recommended_action)
+            if "insight" not in df.columns and "diagnosis" in df.columns:
+                df["insight"] = df["diagnosis"]
+
+            if "action" not in df.columns and "recommended_action" in df.columns:
+                df["action"] = df["recommended_action"]
+
+            # Garante que todas as colunas necessárias existem
+            required_cols = ["client", "type", "insight", "action", "reliability", "suggested_deadline"]
+            for col in required_cols:
+                if col not in df.columns:
+                    df[col] = None
+
+            insights = df[required_cols]
+
         insights.to_excel(writer, sheet_name=sheet_name, index=False)
         sheet = writer.sheets[sheet_name]
         sheet.freeze_panes(1, 0)
+
         for idx, col in enumerate(insights.columns):
             sheet.write(0, idx, col, fmt_header)
-            width = max(15, int(insights[col].astype(str).str.len().mean() * 1.1)) if not insights.empty else 20
+            if insights.empty:
+                width = 20
+            else:
+                width = max(
+                    15,
+                    int(
+                        insights[col]
+                        .astype(str)
+                        .str.len()
+                        .mean()
+                        * 1.1
+                    ),
+                )
             sheet.set_column(idx, idx, width, fmt_text)
 
     def _write_alertas(self, df: pd.DataFrame, writer, fmt_header, fmt_text):
