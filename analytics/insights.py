@@ -30,6 +30,7 @@ class InsightsGenerator:
     # API pública
     # ------------------------------------------------------------------
     def generate_rico_insights(self, transactions: Iterable[Dict], dataset_id: str) -> List[Alert]:
+        dataset_id_str = str(dataset_id)
         df = pd.DataFrame(list(transactions))
         if df.empty:
             return []
