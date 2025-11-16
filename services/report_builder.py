@@ -24,8 +24,10 @@ def convert_transactions_to_records(transactions: List[Any]) -> List[Dict[str, A
     """Converter objetos Transaction (ou dicionários compatíveis) em dicts serializáveis."""
     records: List[Dict[str, Any]] = []
     for tx in transactions:
-        if hasattr(tx, "dict"):
-            data = tx.dict()
+        if hasattr(tx, "model_dump"):
+            data = tx.model_dump()
+        elif hasattr(tx, "dict"):
+            data = getattr(tx, "dict")()
         elif isinstance(tx, dict):
             data = tx.copy()
         else:
@@ -63,7 +65,7 @@ def build_report_dataframes(
     product_analytics = calc.calculate_product_analytics(transactions, dataset_id)
     general_kpis = calc.calculate_general_kpis(transactions)
 
-    clientes_df = pd.DataFrame([c.dict() for c in customer_analytics]) if customer_analytics else pd.DataFrame(
+    clientes_df = pd.DataFrame([c.model_dump() for c in customer_analytics]) if customer_analytics else pd.DataFrame(
         columns=[
             'dataset_id', 'client', 'recency', 'frequency', 'monetary', 'avg_ticket',
             'gm_cliente', 'tier', 'segment', 'city', 'uf', 'last_order', 'rfm_score',
@@ -87,7 +89,7 @@ def build_report_dataframes(
         axis=1
     )
 
-    mix_df = pd.DataFrame([p.dict() for p in product_analytics]) if product_analytics else pd.DataFrame(
+    mix_df = pd.DataFrame([p.model_dump() for p in product_analytics]) if product_analytics else pd.DataFrame(
         columns=['dataset_id', 'sku', 'product', 'orders', 'qty', 'revenue', 'avg_ticket',
                  'turnover_median', 'hero_mix', 'growth_zscore', 'growth_yoy']
     )
