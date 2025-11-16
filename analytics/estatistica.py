@@ -1,4 +1,5 @@
 """Módulo estatístico com funções reutilizáveis pelo motor IPRO."""
+
 from datetime import datetime
 from typing import Iterable, Sequence, Tuple
 
@@ -16,7 +17,9 @@ def _to_series(valores: Iterable[float | int]) -> pd.Series:
     return serie.astype(float)
 
 
-def calcular_probabilidade_recompra(datas_pedidos: Sequence[datetime], janela_dias: int = 90) -> float:
+def calcular_probabilidade_recompra(
+    datas_pedidos: Sequence[datetime], janela_dias: int = 90
+) -> float:
     """Calcular a probabilidade de um cliente recomprar em ``janela_dias``.
 
     A função considera o histórico de datas de pedido (ordenadas) e calcula a
@@ -42,7 +45,9 @@ def calcular_probabilidade_recompra(datas_pedidos: Sequence[datetime], janela_di
     return round(hits / len(deltas), 4)
 
 
-def intervalo_confianca_giro(intervalos_dias: Iterable[float | int], confianca: float = 0.95) -> Tuple[float, float]:
+def intervalo_confianca_giro(
+    intervalos_dias: Iterable[float | int], confianca: float = 0.95
+) -> Tuple[float, float]:
     """Retornar o intervalo de confiança do giro (mediana dos intervalos).
 
     Utiliza o método de percentis (aproximação não paramétrica) para obter os
@@ -59,7 +64,9 @@ def intervalo_confianca_giro(intervalos_dias: Iterable[float | int], confianca: 
     return (lower, upper)
 
 
-def detectar_outlier_volume(valores: Iterable[float | int], z_limite: float = 3.0) -> pd.Series:
+def detectar_outlier_volume(
+    valores: Iterable[float | int], z_limite: float = 3.0
+) -> pd.Series:
     """Detectar volumes fora do padrão via Z-score.
 
     Retorna uma série booleana onde ``True`` indica observações outliers.
@@ -88,7 +95,9 @@ def calcular_cv_giro(intervalos_dias: Iterable[float | int]) -> float:
     return float(serie.std(ddof=0) / media)
 
 
-def score_sobrevivencia_bayesiana(eventos: Sequence[int | bool], alfa: float = 1.0, beta: float = 1.0) -> float:
+def score_sobrevivencia_bayesiana(
+    eventos: Sequence[int | bool], alfa: float = 1.0, beta: float = 1.0
+) -> float:
     """Pontuar probabilidade de *sobrevivência* usando um Beta posterior.
 
     ``eventos`` deve conter 1 para recompra/renovação e 0 para períodos sem

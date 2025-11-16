@@ -8,12 +8,13 @@ from services.schema_aliases import apply_aliases, TX_ALIASES, CUSTOMER_ALIASES
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class DataExtractor:
     """Extrator de dados de planilhas Excel"""
-    
+
     def __init__(self):
-        self.product_pattern = re.compile(r'produto:\s*(.+)', re.IGNORECASE)
-    
+        self.product_pattern = re.compile(r"produto:\s*(.+)", re.IGNORECASE)
+
     def extract_transactions(self, file_path: str) -> List[Dict[str, Any]]:
         """Extrair transações de relatório de pedidos.
 
@@ -35,7 +36,9 @@ class DataExtractor:
         # Se houver alguma linha que comece com "Produto:" (indicando formato em blocos),
         # use o extrator especializado. Caso contrário, caia no extrator estruturado.
         try:
-            has_produto = df[0].dropna().astype(str).str.contains(r"(?i)^\s*produto").any()
+            has_produto = (
+                df[0].dropna().astype(str).str.contains(r"(?i)^\s*produto").any()
+            )
         except Exception:
             has_produto = False
 
@@ -43,11 +46,12 @@ class DataExtractor:
             try:
                 return self._extract_transactions_unstructured(df)
             except Exception as e:
-                logger.error(f"Erro ao extrair transações (formato não estruturado) de {file_path}: {e}")
+                logger.error(
+                    f"Erro ao extrair transações (formato não estruturado) de {file_path}: {e}"
+                )
                 return []
         else:
             return self._extract_transactions_structured(file_path)
-
 
     def _extract_transactions_structured(self, file_path: str) -> List[Dict[str, Any]]:
         """Extrair transações de planilhas estruturadas com uma linha de cabeçalho.
@@ -72,31 +76,58 @@ class DataExtractor:
 
                 # Se depois de aplicar aliases não houver colunas canônicas como 'product' ou 'client',
                 # assumimos que a primeira linha é o cabeçalho e reprocessamos.
-                if not any(col in chunk.columns for col in ['product','date','client','price','qty','order_id']):
+                if not any(
+                    col in chunk.columns
+                    for col in ["product", "date", "client", "price", "qty", "order_id"]
+                ):
                     if len(chunk) > 1:
                         header = chunk.iloc[0]
-                        new_columns = [str(h).strip() if pd.notna(h) else f'col_{i}' for i, h in enumerate(header)]
+                        new_columns = [
+                            str(h).strip() if pd.notna(h) else f"col_{i}"
+                            for i, h in enumerate(header)
+                        ]
                         chunk = chunk.iloc[1:].copy()
                         chunk.columns = new_columns
                         try:
                             chunk = apply_aliases(chunk, TX_ALIASES)
                         except Exception as e:
-                            logger.warning(f"Erro ao aplicar aliases após promover cabeçalho: {e}")
+                            logger.warning(
+                                f"Erro ao aplicar aliases após promover cabeçalho: {e}"
+                            )
 
                 for _, row in chunk.iterrows():
                     try:
                         transaction = {
-                            'product': row.get('product'),
-                            'date': self._parse_date(row.get('date')),
-                            'order_id': self._parse_ean(row.get('order_id')) if pd.notna(row.get('order_id')) else '',
-                            'client': str(row.get('client')) if pd.notna(row.get('client')) else '',
-                            'seller': str(row.get('seller')) if pd.notna(row.get('seller')) else '',
-                            'price': self._parse_float(row.get('price')),
-                            'qty': self._parse_int(row.get('qty')),
-                            'subtotal': self._parse_float(row.get('subtotal'))
+                            "product": row.get("product"),
+                            "date": self._parse_date(row.get("date")),
+                            "order_id": self._parse_ean(row.get("order_id"))
+                            if pd.notna(row.get("order_id"))
+                            else "",
+                            "client": str(row.get("client"))
+                            if pd.notna(row.get("client"))
+                            else "",
+                            "seller": str(row.get("seller"))
+                            if pd.notna(row.get("seller"))
+                            else "",
+                            "price": self._parse_float(row.get("price")),
+                            "qty": self._parse_int(row.get("qty")),
+                            "subtotal": self._parse_float(row.get("subtotal")),
                         }
-                        if (transaction['date'] and transaction['client'] and transaction['price'] >= 0 and transaction['qty'] != 0 and not self._is_noise_row(row)):
-                            transaction_key = (transaction['date'], transaction['order_id'], transaction['product'], transaction['client'], transaction['qty'], transaction['price'])
+                        if (
+                            transaction["date"]
+                            and transaction["client"]
+                            and transaction["price"] >= 0
+                            and transaction["qty"] != 0
+                            and not self._is_noise_row(row)
+                        ):
+                            transaction_key = (
+                                transaction["date"],
+                                transaction["order_id"],
+                                transaction["product"],
+                                transaction["client"],
+                                transaction["qty"],
+                                transaction["price"],
+                            )
                             if transaction_key not in seen_transactions:
                                 transactions.append(transaction)
                                 seen_transactions.add(transaction_key)
@@ -109,7 +140,9 @@ class DataExtractor:
             logger.error(f"Erro ao extrair transações estruturadas de {file_path}: {e}")
             return []
 
-    def _extract_transactions_unstructured(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+    def _extract_transactions_unstructured(
+        self, df: pd.DataFrame
+    ) -> List[Dict[str, Any]]:
         """Extrair transações de relatórios em blocos "Produto:".
 
         Este método percorre linha a linha, identificando blocos iniciados por
@@ -126,25 +159,27 @@ class DataExtractor:
         # correspondem aos nomes canônicos que serão usados posteriormente (ex.: 'date'),
         # evitando divergências como 'data' vs. 'date'.
         header_keywords = {
-            'date': ['data', 'data emissão', 'data emissao', 'emissão', 'emissao'],
-            'order_id': ['pedido','order'],
-            'client': ['cliente','cliente nome','razao'],
-            'seller': ['criador','vendedor','representante'],
-            'price': ['preço','preco','valor'],
-            'qty': ['quantidade','qtd','qde','qtde','quant'],
-            'subtotal': ['subtotal','total']
+            "date": ["data", "data emissão", "data emissao", "emissão", "emissao"],
+            "order_id": ["pedido", "order"],
+            "client": ["cliente", "cliente nome", "razao"],
+            "seller": ["criador", "vendedor", "representante"],
+            "price": ["preço", "preco", "valor"],
+            "qty": ["quantidade", "qtd", "qde", "qtde", "quant"],
+            "subtotal": ["subtotal", "total"],
         }
 
         for _, row in df.iterrows():
             # Converta valores NaN para strings vazias para facilitar comparações
-            row_vals = [str(x).strip() if not pd.isna(x) else '' for x in row]
+            row_vals = [str(x).strip() if not pd.isna(x) else "" for x in row]
             # Detecta início de bloco "Produto:"
             cell0 = row_vals[0]
-            if cell0.lower().startswith('produto'):
+            if cell0.lower().startswith("produto"):
                 # Extraia o nome do produto após 'Produto:'
-                match = re.search(r'produto\s*:\s*(.+)', cell0, re.IGNORECASE)
+                match = re.search(r"produto\s*:\s*(.+)", cell0, re.IGNORECASE)
                 current_product = match.group(1).strip() if match else None
-                header_positions = None  # Reinicia detecção de cabeçalho para novo bloco
+                header_positions = (
+                    None  # Reinicia detecção de cabeçalho para novo bloco
+                )
                 continue
             # Detectar cabeçalho
             if current_product and not header_positions:
@@ -152,7 +187,7 @@ class DataExtractor:
                 lower_vals = [v.lower() for v in row_vals]
                 score = 0
                 for keywords in header_keywords.values():
-                    if any(kw in ' '.join(lower_vals) for kw in keywords):
+                    if any(kw in " ".join(lower_vals) for kw in keywords):
                         score += 1
                 # Se pelo menos três categorias foram identificadas, tratamos como cabeçalho
                 if score >= 3:
@@ -166,36 +201,56 @@ class DataExtractor:
             # Linhas de dados
             if current_product and header_positions:
                 # Se a coluna de data estiver presente, use‑a para validar se é linha de dados
-                date_idx = header_positions.get('date')
-                date_val = row_vals[date_idx] if date_idx is not None and date_idx < len(row_vals) else ''
+                date_idx = header_positions.get("date")
+                date_val = (
+                    row_vals[date_idx]
+                    if date_idx is not None and date_idx < len(row_vals)
+                    else ""
+                )
                 parsed_date = self._parse_date(date_val)
                 if not parsed_date:
                     # Linha de resumo ou vazia; ignore
                     continue
+
                 # Obter outros campos conforme mapeamento; use get para evitar índices fora de alcance
                 def get_field(field: str) -> str:
                     idx = header_positions.get(field)
-                    return row_vals[idx] if idx is not None and idx < len(row_vals) else ''
+                    return (
+                        row_vals[idx] if idx is not None and idx < len(row_vals) else ""
+                    )
 
                 transaction = {
-                    'product': current_product,
-                    'date': parsed_date,
-                    'order_id': self._parse_ean(get_field('order_id')),
-                    'client': str(get_field('client')),
-                    'seller': str(get_field('seller')),
-                    'price': self._parse_float(get_field('price')),
-                    'qty': self._parse_int(get_field('qty')),
-                    'subtotal': self._parse_float(get_field('subtotal'))
+                    "product": current_product,
+                    "date": parsed_date,
+                    "order_id": self._parse_ean(get_field("order_id")),
+                    "client": str(get_field("client")),
+                    "seller": str(get_field("seller")),
+                    "price": self._parse_float(get_field("price")),
+                    "qty": self._parse_int(get_field("qty")),
+                    "subtotal": self._parse_float(get_field("subtotal")),
                 }
                 # Validações básicas
-                if (transaction['client'] and transaction['price'] >= 0 and transaction['qty'] != 0):
-                    transaction_key = (transaction['date'], transaction['order_id'], transaction['product'], transaction['client'], transaction['qty'], transaction['price'])
+                if (
+                    transaction["client"]
+                    and transaction["price"] >= 0
+                    and transaction["qty"] != 0
+                ):
+                    transaction_key = (
+                        transaction["date"],
+                        transaction["order_id"],
+                        transaction["product"],
+                        transaction["client"],
+                        transaction["qty"],
+                        transaction["price"],
+                    )
                     if transaction_key not in seen_transactions:
                         transactions.append(transaction)
                         seen_transactions.add(transaction_key)
-        logger.info(f"Extraídas {len(transactions)} transações (unstructured) de relatório")
+        logger.info(
+            f"Extraídas {len(transactions)} transações (unstructured) de relatório"
+        )
         return transactions
-    
+
     def extract_customers(self, file_path: str) -> List[Dict[str, Any]]:
         """Extrair dados de cadastro de clientes"""
         try:
@@ -208,38 +263,45 @@ class DataExtractor:
                     logger.warning(f"Erro ao aplicar aliases em clientes: {e}")
 
                 # Se não houver coluna 'client' após alias, assumir que a primeira linha é cabeçalho
-                if 'client' not in chunk.columns:
+                if "client" not in chunk.columns:
                     if len(chunk) > 1:
                         header = chunk.iloc[0]
-                        new_columns = [str(h).strip() if pd.notna(h) else f'col_{i}' for i, h in enumerate(header)]
+                        new_columns = [
+                            str(h).strip() if pd.notna(h) else f"col_{i}"
+                            for i, h in enumerate(header)
+                        ]
                         chunk = chunk.iloc[1:].copy()
                         chunk.columns = new_columns
                         try:
                             chunk = apply_aliases(chunk, CUSTOMER_ALIASES)
                         except Exception as e:
-                            logger.warning(f"Erro ao aplicar aliases em clientes após promover cabeçalho: {e}")
+                            logger.warning(
+                                f"Erro ao aplicar aliases em clientes após promover cabeçalho: {e}"
+                            )
 
                 for _, row in chunk.iterrows():
-                    nome = str(row.get('client') or '').strip()
+                    nome = str(row.get("client") or "").strip()
                     if not nome:
                         continue
-                    customers.append({
-                        "name": nome,
-                        "cnpj": str(row.get('cnpj') or '').strip(),
-                        "ie": str(row.get('ie') or '').strip(),
-                        "uf": str(row.get('uf') or '').strip().upper(),
-                        "city": str(row.get('city') or '').strip(),
-                        "created_at": datetime.now()
-                    })
+                    customers.append(
+                        {
+                            "name": nome,
+                            "cnpj": str(row.get("cnpj") or "").strip(),
+                            "ie": str(row.get("ie") or "").strip(),
+                            "uf": str(row.get("uf") or "").strip().upper(),
+                            "city": str(row.get("city") or "").strip(),
+                            "created_at": datetime.now(),
+                        }
+                    )
             return customers
         except Exception as e:
             logger.error(f"Erro ao extrair clientes de {file_path}: {e}")
             return []
-    
+
     def _parse_date(self, value: Any) -> Optional[datetime]:
         try:
             # Valor nulo ou NaN
-            if value is None or (pd.isna(value) if 'pd' in globals() else False):
+            if value is None or (pd.isna(value) if "pd" in globals() else False):
                 return None
             # Já é datetime
             if isinstance(value, datetime):
@@ -264,7 +326,7 @@ class DataExtractor:
         decimal ("123,45" → 123.45). Caso contrário, o ponto é tratado como separador
         decimal.
         """
-        if value is None or (pd.isna(value) if 'pd' in globals() else False):
+        if value is None or (pd.isna(value) if "pd" in globals() else False):
             return 0.0
         try:
             # Se já é número, converta diretamente
@@ -283,7 +345,7 @@ class DataExtractor:
             return 0.0
 
     def _parse_int(self, value: Any) -> int:
-        if value is None or (pd.isna(value) if 'pd' in globals() else False):
+        if value is None or (pd.isna(value) if "pd" in globals() else False):
             return 0
         try:
             # Tratar strings com vírgula/ponto como decimais e converter para int
@@ -298,8 +360,6 @@ class DataExtractor:
         except Exception:
             return 0
 
-
-
     def iter_excel_rows(self, file_path: str, sheet_name=0, chunksize=50000):
         """
         Ler um arquivo Excel e retornar pedaços (chunks) do DataFrame.
@@ -310,6 +370,7 @@ class DataExtractor:
         Utiliza `chunksize` para permitir processamento incremental de arquivos grandes.
         """
         import pandas as pd
+
         # Tenta ler a planilha usando a primeira linha como cabeçalho
         # Se a planilha não tiver cabeçalho, os nomes das colunas serão numerados (0,1,2,..)
         df = pd.read_excel(file_path, sheet_name=sheet_name)
@@ -318,27 +379,25 @@ class DataExtractor:
             return
         n = df.shape[0]
         for start in range(0, n, chunksize):
-            yield df.iloc[start:start+chunksize].copy()
-
-
+            yield df.iloc[start : start + chunksize].copy()
 
     def _parse_ean(self, value: Any) -> str:
         if pd.isna(value):
-            return ''
+            return ""
         s = str(value).strip()
-        if re.match(r'^\d{12,14}$', s): # EAN-13 or similar
+        if re.match(r"^\d{12,14}$", s):  # EAN-13 or similar
             return s
-        if re.match(r'^\d+\.\d+E\+\d+$', s): # Excel scientific notation
+        if re.match(r"^\d+\.\d+E\+\d+$", s):  # Excel scientific notation
             return str(int(float(s)))
         return s
-
-
-
 
     def _is_noise_row(self, row: pd.Series) -> bool:
         # Critérios para identificar linhas de ruído
         # Exemplo: linhas onde 'client' e 'product' são NaN, ou que contêm padrões de 'total'
-        return pd.isna(row.get('client')) and pd.isna(row.get('product')) or \
-               any(re.search(r'total|subtotal', str(v), re.IGNORECASE) for v in row.values)
-
-
+        return (
+            pd.isna(row.get("client"))
+            and pd.isna(row.get("product"))
+            or any(
+                re.search(r"total|subtotal", str(v), re.IGNORECASE) for v in row.values
+            )
+        )

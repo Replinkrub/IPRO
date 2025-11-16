@@ -1,4 +1,5 @@
 """Geração de insights R.I.C.O. com enriquecimento estatístico."""
+
 from __future__ import annotations
 
 from typing import Dict, Iterable, List
@@ -29,17 +30,22 @@ class InsightsGenerator:
     # ------------------------------------------------------------------
     # API pública
     # ------------------------------------------------------------------
-    def generate_rico_insights(self, transactions: Iterable[Dict], dataset_id: str) -> List[Alert]:
+    def generate_rico_insights(
+        self, transactions: Iterable[Dict], dataset_id: str
+    ) -> List[Alert]:
+        """Gerar alertas padronizados com base nas regras R.I.C.O."""
         dataset_id_str = str(dataset_id)
         df = pd.DataFrame(list(transactions))
         if df.empty:
             return []
 
-        df['date'] = pd.to_datetime(df['date'], utc=True)
-        df['qty'] = pd.to_numeric(df['qty'], errors='coerce').fillna(0)
-        df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
+        df["date"] = pd.to_datetime(df["date"], utc=True)
+        df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0)
+        df["subtotal"] = pd.to_numeric(df["subtotal"], errors="coerce").fillna(0.0)
 
-        segmentos = {seg.client: seg for seg in self.segmentador.avaliar(df.to_dict('records'))}
+        segmentos = {
+            seg.client: seg for seg in self.segmentador.avaliar(df.to_dict("records"))
+        }
 
         dataset_id_str = str(dataset_id)
 
@@ -52,19 +58,18 @@ class InsightsGenerator:
     # ------------------------------------------------------------------
     # Regras de negócio
     # ------------------------------------------------------------------
-    def _ruptura_alerts(self, df: pd.DataFrame, dataset_id: str, segmentos) -> List[Alert]:
+    def _ruptura_alerts(
+        self, df: pd.DataFrame, dataset_id: str, segmentos
+    ) -> List[Alert]:
         resultados: List[Alert] = []
         dataset_id_str = str(dataset_id)
-        for (client, sku), group in df.groupby(['client', 'sku']):
+        for (client, sku), group in df.groupby(["client", "sku"]):
             if group.shape[0] < 2:
                 continue
 
-            datas = group.sort_values('date')['date'].tolist()
+            datas = group.sort_values("date")["date"].tolist()
             prob_recompra = calcular_probabilidade_recompra(datas, janela_dias=90)
-            intervalos = [
-                (datas[i] - datas[i - 1]).days
-                for i in range(1, len(datas))
-            ]
+            intervalos = [(datas[i] - datas[i - 1]).days for i in range(1, len(datas))]
             if not intervalos:
                 continue
 
@@ -77,12 +82,10 @@ class InsightsGenerator:
             ic_low, ic_high = intervalo_confianca_giro(intervalos)
             insight = (
                 f"Cliente {client} sem comprar {sku} há {dias_sem_compra} dias. "
-                f"Giro mediano {giro_mediano:.1f}d (IC {ic_low:.0f}-{ic_high:.0f}) e prob. recompra {prob_recompra*100:.0f}%."
+                f"Giro mediano {giro_mediano:.1f}d (IC {ic_low:.0f}-{ic_high:.0f}) e prob. recompra {prob_recompra * 100:.0f}%."
             )
             gatilhos = segmentos.get(client)
-            diagnosis = (
-                f"{client} está há {dias_sem_compra}d sem comprar {sku} (giro {giro_mediano:.0f}d)."
-            )
+            diagnosis = f"{client} está há {dias_sem_compra}d sem comprar {sku} (giro {giro_mediano:.0f}d)."
             recommended_action = (
                 f"Ligar para {client} e reservar estoque para reposição em até 3 dias."
             )
@@ -105,18 +108,20 @@ class InsightsGenerator:
             )
         return resultados
 
-    def _queda_brusca_alerts(self, df: pd.DataFrame, dataset_id: str, segmentos) -> List[Alert]:
+    def _queda_brusca_alerts(
+        self, df: pd.DataFrame, dataset_id: str, segmentos
+    ) -> List[Alert]:
         resultados: List[Alert] = []
         dataset_id_str = str(dataset_id)
-        df['mes'] = df['date'].dt.to_period('M')
-        mensal = df.groupby(['client', 'mes'])['subtotal'].sum().reset_index()
+        df["mes"] = df["date"].dt.to_period("M")
+        mensal = df.groupby(["client", "mes"])["subtotal"].sum().reset_index()
 
-        for client, grupo in mensal.groupby('client'):
+        for client, grupo in mensal.groupby("client"):
             if grupo.shape[0] < 3:
                 continue
 
-            grupo = grupo.sort_values('mes')
-            valores = grupo['subtotal'].values.astype(float)
+            grupo = grupo.sort_values("mes")
+            valores = grupo["subtotal"].values.astype(float)
             media = valores[:-1].mean()
             desvio = valores[:-1].std() or 1.0
             ultimo = valores[-1]
@@ -134,14 +139,12 @@ class InsightsGenerator:
                     f"Z-score {z_score:.2f}, YoY {yoy:.1f}%"
                 )
                 gatilhos = segmentos.get(client)
-                diagnosis = (
-                    f"Receita mensal de {client} recuou {queda_pct:.1f}% (z {z_score:.1f})."
-                )
-                recommended_action = (
-                    "Oferecer ofertas de recuperação e revisar cobertura com o time comercial."
-                )
+                diagnosis = f"Receita mensal de {client} recuou {queda_pct:.1f}% (z {z_score:.1f})."
+                recommended_action = "Oferecer ofertas de recuperação e revisar cobertura com o time comercial."
                 if gatilhos and gatilhos.gatilhos:
-                    recommended_action += " Verificar também: " + ", ".join(gatilhos.gatilhos)
+                    recommended_action += " Verificar também: " + ", ".join(
+                        gatilhos.gatilhos
+                    )
 
                 resultados.append(
                     Alert(
@@ -159,14 +162,16 @@ class InsightsGenerator:
                 )
         return resultados
 
-    def _outlier_volume_alerts(self, df: pd.DataFrame, dataset_id: str, segmentos) -> List[Alert]:
+    def _outlier_volume_alerts(
+        self, df: pd.DataFrame, dataset_id: str, segmentos
+    ) -> List[Alert]:
         resultados: List[Alert] = []
         dataset_id_str = str(dataset_id)
-        for (client, sku), group in df.groupby(['client', 'sku']):
+        for (client, sku), group in df.groupby(["client", "sku"]):
             if group.shape[0] < 5:
                 continue
 
-            serie = group.sort_values('date').set_index('date')['qty']
+            serie = group.sort_values("date").set_index("date")["qty"]
             mask = detectar_outlier_volume(serie)
             if mask.empty or not mask.any():
                 continue
@@ -186,9 +191,7 @@ class InsightsGenerator:
             )
             gatilhos = segmentos.get(client)
             variacao_pct = delta * 100
-            diagnosis = (
-                f"Volume de {sku} ficou {direcao} {variacao_pct:.0f}% vs média ({valor:.0f} vs {media:.0f})."
-            )
+            diagnosis = f"Volume de {sku} ficou {direcao} {variacao_pct:.0f}% vs média ({valor:.0f} vs {media:.0f})."
             recommended_action = (
                 "Agendar validação de estoque e alinhar com operações/atendimento."
             )
@@ -221,4 +224,3 @@ class InsightsGenerator:
         if score >= 0.4:
             return "🟡"
         return "🔵"
-

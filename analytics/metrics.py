@@ -1,4 +1,5 @@
 """Motor de métricas canônicas do IPRO."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -20,42 +21,45 @@ class MetricsCalculator:
     # ------------------------------------------------------------------
     # Clientes
     # ------------------------------------------------------------------
-    def calculate_customer_rfm(self, transactions: Iterable[Dict], dataset_id: str) -> List[CustomerAnalytics]:
+    def calculate_customer_rfm(
+        self, transactions: Iterable[Dict], dataset_id: str
+    ) -> List[CustomerAnalytics]:
+        """Calcular métricas RFM consolidadas dos clientes."""
         dataset_id_str = str(dataset_id)
         df = pd.DataFrame(list(transactions))
         if df.empty:
             return []
 
-        df['date'] = pd.to_datetime(df['date'], utc=True)
-        df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
+        df["date"] = pd.to_datetime(df["date"], utc=True)
+        df["subtotal"] = pd.to_numeric(df["subtotal"], errors="coerce").fillna(0.0)
 
         resultados: List[Dict] = []
-        for client, grupo in df.groupby('client'):
-            grupo = grupo.sort_values('date')
-            recency = int((self.reference_date - grupo['date'].max()).days)
-            frequency = int(grupo['order_id'].nunique())
-            monetary = float(grupo['subtotal'].sum())
+        for client, grupo in df.groupby("client"):
+            grupo = grupo.sort_values("date")
+            recency = int((self.reference_date - grupo["date"].max()).days)
+            frequency = int(grupo["order_id"].nunique())
+            monetary = float(grupo["subtotal"].sum())
             avg_ticket = monetary / frequency if frequency > 0 else 0.0
-            turnover_median = self._median_turnover(grupo['date'])
+            turnover_median = self._median_turnover(grupo["date"])
 
-            segment = self._mode_or_none(grupo.get('segment'))
-            city = self._mode_or_none(grupo.get('city'))
-            uf = self._mode_or_none(grupo.get('uf'))
+            segment = self._mode_or_none(grupo.get("segment"))
+            city = self._mode_or_none(grupo.get("city"))
+            uf = self._mode_or_none(grupo.get("uf"))
 
             resultados.append(
                 {
-                    'dataset_id': dataset_id_str,
-                    'client': client,
-                    'recency': recency,
-                    'frequency': frequency,
-                    'monetary': monetary,
-                    'avg_ticket': avg_ticket,
-                    'gm_cliente': turnover_median,
-                    'tier': 'bronze',  # placeholder, ajustado após normalização
-                    'segment': segment,
-                    'city': city,
-                    'uf': uf,
-                    'last_order': grupo['date'].max(),
+                    "dataset_id": dataset_id_str,
+                    "client": client,
+                    "recency": recency,
+                    "frequency": frequency,
+                    "monetary": monetary,
+                    "avg_ticket": avg_ticket,
+                    "gm_cliente": turnover_median,
+                    "tier": "bronze",  # placeholder, ajustado após normalização
+                    "segment": segment,
+                    "city": city,
+                    "uf": uf,
+                    "last_order": grupo["date"].max(),
                 }
             )
 
@@ -64,55 +68,72 @@ class MetricsCalculator:
 
         resultados_df = pd.DataFrame(resultados)
         weights = self._segment_weights(df)
-        resultados_df['segment_weight'] = resultados_df['client'].map(weights).fillna(1.0)
+        resultados_df["segment_weight"] = (
+            resultados_df["client"].map(weights).fillna(1.0)
+        )
 
-        resultados_df['recency_pct'] = 1 - resultados_df['recency'].rank(pct=True, method='average')
-        resultados_df['frequency_pct'] = resultados_df['frequency'].rank(pct=True, method='average')
-        resultados_df['monetary_pct'] = resultados_df['monetary'].rank(pct=True, method='average')
+        resultados_df["recency_pct"] = 1 - resultados_df["recency"].rank(
+            pct=True, method="average"
+        )
+        resultados_df["frequency_pct"] = resultados_df["frequency"].rank(
+            pct=True, method="average"
+        )
+        resultados_df["monetary_pct"] = resultados_df["monetary"].rank(
+            pct=True, method="average"
+        )
 
-        resultados_df['rfm_score'] = (
-            0.4 * resultados_df['recency_pct']
-            + 0.3 * resultados_df['frequency_pct']
-            + 0.3 * resultados_df['monetary_pct']
-        ) * resultados_df['segment_weight']
+        resultados_df["rfm_score"] = (
+            0.4 * resultados_df["recency_pct"]
+            + 0.3 * resultados_df["frequency_pct"]
+            + 0.3 * resultados_df["monetary_pct"]
+        ) * resultados_df["segment_weight"]
 
-        resultados_df['tier'] = resultados_df['rfm_score'].apply(self._tier_from_score)
+        resultados_df["tier"] = resultados_df["rfm_score"].apply(self._tier_from_score)
 
-        registros = resultados_df.drop(columns=['recency_pct', 'frequency_pct', 'monetary_pct']).to_dict('records')
+        registros = resultados_df.drop(
+            columns=["recency_pct", "frequency_pct", "monetary_pct"]
+        ).to_dict("records")
         return [CustomerAnalytics(**r) for r in registros]
 
     # ------------------------------------------------------------------
     # Produtos
     # ------------------------------------------------------------------
-    def calculate_product_analytics(self, transactions: Iterable[Dict], dataset_id: str) -> List[ProductAnalytics]:
+    def calculate_product_analytics(
+        self, transactions: Iterable[Dict], dataset_id: str
+    ) -> List[ProductAnalytics]:
+        """Calcular indicadores de desempenho dos produtos."""
         dataset_id_str = str(dataset_id)
         df = pd.DataFrame(list(transactions))
         if df.empty:
             return []
 
-        df['date'] = pd.to_datetime(df['date'], utc=True)
-        df['qty'] = pd.to_numeric(df['qty'], errors='coerce').fillna(0)
-        df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
+        df["date"] = pd.to_datetime(df["date"], utc=True)
+        df["qty"] = pd.to_numeric(df["qty"], errors="coerce").fillna(0)
+        df["subtotal"] = pd.to_numeric(df["subtotal"], errors="coerce").fillna(0.0)
 
-        revenue_per_sku = df.groupby('sku')['subtotal'].sum()
-        hero_threshold = revenue_per_sku.quantile(0.8) if not revenue_per_sku.empty else 0.0
+        revenue_per_sku = df.groupby("sku")["subtotal"].sum()
+        hero_threshold = (
+            revenue_per_sku.quantile(0.8) if not revenue_per_sku.empty else 0.0
+        )
 
         df = df.copy()
-        if pd.api.types.is_datetime64tz_dtype(df['date']):
-            df['date'] = df['date'].dt.tz_localize(None)
+        if pd.api.types.is_datetime64tz_dtype(df["date"]):
+            df["date"] = df["date"].dt.tz_localize(None)
 
-        mensal = df.groupby(['sku', df['date'].dt.to_period('M')])['subtotal'].sum()
+        mensal = df.groupby(["sku", df["date"].dt.to_period("M")])["subtotal"].sum()
 
         resultados: List[ProductAnalytics] = []
-        for sku, grupo in df.groupby('sku'):
-            grupo = grupo.sort_values('date')
-            orders = int(grupo['order_id'].nunique())
-            qty = int(grupo['qty'].sum())
-            revenue = float(grupo['subtotal'].sum())
+        for sku, grupo in df.groupby("sku"):
+            grupo = grupo.sort_values("date")
+            orders = int(grupo["order_id"].nunique())
+            qty = int(grupo["qty"].sum())
+            revenue = float(grupo["subtotal"].sum())
             avg_ticket = revenue / orders if orders else 0.0
-            turnover_median = self._median_turnover(grupo['date'])
+            turnover_median = self._median_turnover(grupo["date"])
 
-            serie_mensal = mensal.loc[sku] if sku in mensal.index.get_level_values(0) else None
+            serie_mensal = (
+                mensal.loc[sku] if sku in mensal.index.get_level_values(0) else None
+            )
             growth_z = 0.0
             growth_yoy = 0.0
             if serie_mensal is not None:
@@ -126,7 +147,7 @@ class MetricsCalculator:
                     base = valores[-13]
                     growth_yoy = ((valores[-1] - base) / max(1.0, base)) * 100
 
-            produto = grupo.iloc[0].get('product') or sku
+            produto = grupo.iloc[0].get("product") or sku
             resultados.append(
                 ProductAnalytics(
                     dataset_id=dataset_id_str,
@@ -149,31 +170,32 @@ class MetricsCalculator:
     # KPIs gerais
     # ------------------------------------------------------------------
     def calculate_general_kpis(self, transactions: Iterable[Dict]) -> Dict[str, float]:
+        """Gerar KPIs gerais de receita, clientes e ruptura."""
         df = pd.DataFrame(list(transactions))
         if df.empty:
             return {
-                'total_revenue': 0.0,
-                'total_customers': 0,
-                'total_products': 0,
-                'total_orders': 0,
-                'avg_ticket': 0.0,
-                'avg_recency': 0.0,
-                'avg_frequency': 0.0,
-                'ruptura_projetada_media': 0.0,
+                "total_revenue": 0.0,
+                "total_customers": 0,
+                "total_products": 0,
+                "total_orders": 0,
+                "avg_ticket": 0.0,
+                "avg_recency": 0.0,
+                "avg_frequency": 0.0,
+                "ruptura_projetada_media": 0.0,
             }
 
-        df['date'] = pd.to_datetime(df['date'], utc=True)
-        df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
+        df["date"] = pd.to_datetime(df["date"], utc=True)
+        df["subtotal"] = pd.to_numeric(df["subtotal"], errors="coerce").fillna(0.0)
 
-        total_revenue = float(df['subtotal'].sum())
-        total_customers = int(df['client'].nunique())
-        total_products = int(df['sku'].nunique())
-        total_orders = int(df['order_id'].nunique())
+        total_revenue = float(df["subtotal"].sum())
+        total_customers = int(df["client"].nunique())
+        total_products = int(df["sku"].nunique())
+        total_orders = int(df["order_id"].nunique())
         avg_ticket = total_revenue / total_orders if total_orders else 0.0
 
-        customer_group = df.groupby('client')['date']
+        customer_group = df.groupby("client")["date"]
         recencies = (self.reference_date - customer_group.max()).dt.days
-        frequencies = df.groupby('client')['order_id'].nunique()
+        frequencies = df.groupby("client")["order_id"].nunique()
 
         avg_recency = float(recencies.mean()) if not recencies.empty else 0.0
         avg_frequency = float(frequencies.mean()) if not frequencies.empty else 0.0
@@ -188,21 +210,25 @@ class MetricsCalculator:
 
         ruptura_media = float(np.mean(rupturas)) if rupturas else 0.0
 
-        periodo_inicio = df['date'].min()
-        periodo_fim = df['date'].max()
+        periodo_inicio = df["date"].min()
+        periodo_fim = df["date"].max()
 
         return {
-            'total_revenue': total_revenue,
-            'total_customers': total_customers,
-            'total_products': total_products,
-            'total_orders': total_orders,
-            'avg_ticket': avg_ticket,
-            'avg_recency': avg_recency,
-            'avg_frequency': avg_frequency,
-            'period_start': periodo_inicio.isoformat() if pd.notna(periodo_inicio) else None,
-            'period_end': periodo_fim.isoformat() if pd.notna(periodo_fim) else None,
-            'period_days': int((periodo_fim - periodo_inicio).days) if pd.notna(periodo_fim) and pd.notna(periodo_inicio) else 0,
-            'ruptura_projetada_media': ruptura_media,
+            "total_revenue": total_revenue,
+            "total_customers": total_customers,
+            "total_products": total_products,
+            "total_orders": total_orders,
+            "avg_ticket": avg_ticket,
+            "avg_recency": avg_recency,
+            "avg_frequency": avg_frequency,
+            "period_start": periodo_inicio.isoformat()
+            if pd.notna(periodo_inicio)
+            else None,
+            "period_end": periodo_fim.isoformat() if pd.notna(periodo_fim) else None,
+            "period_days": int((periodo_fim - periodo_inicio).days)
+            if pd.notna(periodo_fim) and pd.notna(periodo_inicio)
+            else 0,
+            "ruptura_projetada_media": ruptura_media,
         }
 
     # ------------------------------------------------------------------
@@ -225,22 +251,24 @@ class MetricsCalculator:
         return float(diffs.median())
 
     def _segment_weights(self, df: pd.DataFrame) -> Dict[str, float]:
-        if 'segment' not in df.columns:
+        if "segment" not in df.columns:
             return {}
-        tot = df.groupby('segment')['subtotal'].sum().dropna()
+        tot = df.groupby("segment")["subtotal"].sum().dropna()
         if tot.empty:
             return {}
         total = tot.sum()
         pesos = 0.5 + (tot / total) * 0.5
-        mapa = df[['client', 'segment']].drop_duplicates().set_index('client')['segment']
+        mapa = (
+            df[["client", "segment"]].drop_duplicates().set_index("client")["segment"]
+        )
         return mapa.map(pesos).fillna(1.0).to_dict()
 
     @staticmethod
     def _tier_from_score(score: float) -> str:
         if score >= 0.85:
-            return 'hero'
+            return "hero"
         if score >= 0.65:
-            return 'growth'
+            return "growth"
         if score >= 0.45:
-            return 'manter'
-        return 'risco'
+            return "manter"
+        return "risco"

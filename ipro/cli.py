@@ -1,4 +1,5 @@
 """Interface de linha de comando para utilidades do IPRO."""
+
 from __future__ import annotations
 
 import argparse
@@ -114,11 +115,17 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.command == "normalize":
         if not args.alias:
-            LOGGER.warning("Nenhum arquivo de alias informado; prosseguindo sem aplicar aliases de SKU.")
+            LOGGER.warning(
+                "Nenhum arquivo de alias informado; prosseguindo sem aplicar aliases de SKU."
+            )
         if not args.names:
-            LOGGER.warning("Nenhum arquivo de nomes canônicos informado; prosseguindo sem renomear SKUs.")
+            LOGGER.warning(
+                "Nenhum arquivo de nomes canônicos informado; prosseguindo sem renomear SKUs."
+            )
         if not args.clients:
-            LOGGER.warning("Nenhum arquivo de clientes canônicos informado; prosseguindo sem normalizar clientes.")
+            LOGGER.warning(
+                "Nenhum arquivo de clientes canônicos informado; prosseguindo sem normalizar clientes."
+            )
 
         df = _read_excel(args.input, sheet_name=args.sheet)
         normalized = run_normalization(
