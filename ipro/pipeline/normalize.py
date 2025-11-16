@@ -1,4 +1,5 @@
 """Pipeline de normalização de relatórios de pedidos."""
+
 from __future__ import annotations
 
 import logging
@@ -46,7 +47,9 @@ def run_normalization(
         )
         LOGGER.info("Aplicados %d aliases de SKU", len(sku_aliases))
     elif sku_alias_path:
-        LOGGER.warning("Nenhum alias aplicado; arquivo %s vazio ou inválido.", sku_alias_path)
+        LOGGER.warning(
+            "Nenhum alias aplicado; arquivo %s vazio ou inválido.", sku_alias_path
+        )
 
     sku_names = _load_mapping(sku_names_path, "sku", "name")
     if sku_names:
@@ -75,7 +78,9 @@ def run_normalization(
 
     # Ordenação e reindexação final
     normalized = normalized[BASE_COLUMNS]
-    normalized = normalized.sort_values(["date", "client", "sku"], na_position="last").reset_index(drop=True)
+    normalized = normalized.sort_values(
+        ["date", "client", "sku"], na_position="last"
+    ).reset_index(drop=True)
     return normalized
 
 
@@ -105,7 +110,11 @@ def _normalize_structure(df: pd.DataFrame) -> pd.DataFrame:
             series = df[source_col]
             result[target] = series.copy()
         else:
-            result[target] = pd.Series(["" for _ in range(len(df))]) if target not in {"price", "qty", "subtotal"} else pd.Series([0 for _ in range(len(df))])
+            result[target] = (
+                pd.Series(["" for _ in range(len(df))])
+                if target not in {"price", "qty", "subtotal"}
+                else pd.Series([0 for _ in range(len(df))])
+            )
 
     # SKU extraction heuristics
     if result["sku"].eq("").all():
@@ -134,15 +143,29 @@ def _normalize_structure(df: pd.DataFrame) -> pd.DataFrame:
     result["date"] = pd.to_datetime(result["date"], errors="coerce")
 
     # Clean strings
-    for key in ["order_id", "client", "seller", "sku", "product", "category", "segment", "city", "uf"]:
-        result[key] = result[key].astype(str).fillna("").str.strip().replace({"nan": ""})
+    for key in [
+        "order_id",
+        "client",
+        "seller",
+        "sku",
+        "product",
+        "category",
+        "segment",
+        "city",
+        "uf",
+    ]:
+        result[key] = (
+            result[key].astype(str).fillna("").str.strip().replace({"nan": ""})
+        )
 
     # Final dataframe
     normalized_df = pd.DataFrame(result, columns=BASE_COLUMNS)
     return normalized_df
 
 
-def _find_column(normalized_names: Dict[str, str], keywords: Iterable[str]) -> Optional[str]:
+def _find_column(
+    normalized_names: Dict[str, str], keywords: Iterable[str]
+) -> Optional[str]:
     for keyword in keywords:
         normalized_keyword = _normalize_string(keyword)
         for normalized_col, original in normalized_names.items():
@@ -153,7 +176,9 @@ def _find_column(normalized_names: Dict[str, str], keywords: Iterable[str]) -> O
 
 def _normalize_string(value: str) -> str:
     value = unicodedata.normalize("NFKD", str(value).lower())
-    return "".join(ch for ch in value if not unicodedata.combining(ch) and not ch.isspace())
+    return "".join(
+        ch for ch in value if not unicodedata.combining(ch) and not ch.isspace()
+    )
 
 
 def _split_combined_sku(series: pd.Series) -> tuple[pd.Series, pd.Series]:
@@ -180,7 +205,9 @@ def _coerce_numeric(series: pd.Series, dtype) -> pd.Series:
     return coerced
 
 
-def _load_mapping(path: Optional[str], key_column: str, value_column: str) -> Dict[str, str]:
+def _load_mapping(
+    path: Optional[str], key_column: str, value_column: str
+) -> Dict[str, str]:
     if not path:
         LOGGER.warning("Arquivo de calibração para %s não informado.", value_column)
         return {}

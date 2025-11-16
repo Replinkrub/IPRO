@@ -4,6 +4,7 @@ from datetime import datetime
 from uuid import uuid4
 from decimal import Decimal
 
+
 class Dataset(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()), alias="_id")
     filename: str
@@ -11,9 +12,10 @@ class Dataset(BaseModel):
     rows: int
     hash: str
     status: str = "processing"  # processing, completed, failed
-    
+
     class Config:
         populate_by_name = True
+
 
 class Transaction(BaseModel):
     dataset_id: str
@@ -42,18 +44,20 @@ class Customer(BaseModel):
     created_at: Optional[datetime] = None
     source: str = "upload"
 
+
 class Product(BaseModel):
     sku: str
     name: str
     category: Optional[str] = None
     cost: Optional[float] = None
 
+
 class CustomerAnalytics(BaseModel):
     dataset_id: str
     client: str
-    recency: int        # dias desde a última compra
-    frequency: int      # nº de pedidos
-    monetary: float     # valor total
+    recency: int  # dias desde a última compra
+    frequency: int  # nº de pedidos
+    monetary: float  # valor total
     avg_ticket: float
     gm_cliente: float
     tier: str
@@ -63,6 +67,7 @@ class CustomerAnalytics(BaseModel):
     last_order: Optional[datetime] = None
     rfm_score: float = 0.0
     segment_weight: float = 1.0
+
 
 class ProductAnalytics(BaseModel):
     dataset_id: str
@@ -76,6 +81,7 @@ class ProductAnalytics(BaseModel):
     hero_mix: Optional[bool] = None
     growth_zscore: Optional[float] = None
     growth_yoy: Optional[float] = None
+
 
 class Alert(BaseModel):
     dataset_id: str
@@ -95,16 +101,19 @@ class Alert(BaseModel):
         data.setdefault("recommended_action", data.get("action"))
         return data
 
+
 class Cohort(BaseModel):
     dataset_id: str
     cohort_date: datetime
     retention_data: Dict[str, float]  # retention_month_N
+
 
 class KPIResponse(BaseModel):
     total_clients: int
     avg_recency_days: int
     avg_frequency: float
     avg_value: Decimal
+
 
 class DatasetSummary(BaseModel):
     n_clientes: int
@@ -113,9 +122,9 @@ class DatasetSummary(BaseModel):
     regioes: List[str]
     mix: Dict[str, Any]
 
+
 class UploadResponse(BaseModel):
     dataset_id: str
     rows: int
     started_at: datetime
     status: str = "processing"
-

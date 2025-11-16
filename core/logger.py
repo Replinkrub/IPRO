@@ -1,4 +1,8 @@
-import logging, sys, uuid, os
+import logging
+import os
+import sys
+import uuid
+
 
 class RequestIDFilter(logging.Filter):
     def filter(self, record):
@@ -6,17 +10,23 @@ class RequestIDFilter(logging.Filter):
             record.request_id = "-"
         return True
 
+
 logger = logging.getLogger("ipro")
-handler = logging.StreamHandler(sys.stdout)
-fmt = logging.Formatter(
-    "%(asctime)s | %(levelname)s | %(request_id)s | %(name)s | %(message)s"
+logger.setLevel(
+    logging.INFO if os.getenv("PRODUCTION_ENV") != "true" else logging.WARNING
 )
-handler.setFormatter(fmt)
-logger.setLevel(logging.INFO if os.getenv("PRODUCTION_ENV") != "true" else logging.WARNING)
+
+if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+    handler = logging.StreamHandler(sys.stdout)
+    fmt = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(request_id)s | %(name)s | %(message)s"
+    )
+    handler.setFormatter(fmt)
+    logger.addHandler(handler)
+
+if not any(isinstance(f, RequestIDFilter) for f in logger.filters):
+    logger.addFilter(RequestIDFilter())
 
 
-logger.addHandler(handler)
-logger.addFilter(RequestIDFilter())
-
-def new_request_id(): return str(uuid.uuid4())
-
+def new_request_id():
+    return str(uuid.uuid4())

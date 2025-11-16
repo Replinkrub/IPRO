@@ -4,20 +4,21 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Database:
     _instance = None
     _client = None
     _db = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(Database, cls).__new__(cls)
         return cls._instance
-    
+
     def __init__(self):
         if self._client is None:
             self.connect()
-    
+
     def connect(self):
         """Abrir conexão e garantir índices"""
         # Se já existe uma instância do banco, simplesmente retorne-a
@@ -38,8 +39,12 @@ class Database:
         self._db.transactions.create_index([("client", ASCENDING)])
         self._db.transactions.create_index([("sku", ASCENDING)])
         self._db.transactions.create_index([("date", ASCENDING)])
-        self._db.transactions.create_index([("dataset_id", ASCENDING), ("date", ASCENDING)], name="dataset_date_idx")
-        self._db.transactions.create_index([("client", ASCENDING), ("sku", ASCENDING)], name="client_sku_idx")
+        self._db.transactions.create_index(
+            [("dataset_id", ASCENDING), ("date", ASCENDING)], name="dataset_date_idx"
+        )
+        self._db.transactions.create_index(
+            [("client", ASCENDING), ("sku", ASCENDING)], name="client_sku_idx"
+        )
 
         self._db.analytics_customer.create_index([("dataset_id", ASCENDING)])
         self._db.analytics_customer.create_index([("client", ASCENDING)])
@@ -49,12 +54,22 @@ class Database:
 
         # Evita duplicidade da mesma linha de venda
         self._db.transactions.create_index(
-            [("dataset_id", ASCENDING), ("order_id", ASCENDING), ("sku", ASCENDING), ("date", ASCENDING)],
-            unique=True, name="uniq_tx_dataset_order_sku_date"
+            [
+                ("dataset_id", ASCENDING),
+                ("order_id", ASCENDING),
+                ("sku", ASCENDING),
+                ("date", ASCENDING),
+            ],
+            unique=True,
+            name="uniq_tx_dataset_order_sku_date",
         )
 
         # Protege reprocessamento do mesmo arquivo
-        self._db.datasets.create_index([("dataset_id", ASCENDING), ("hash", ASCENDING)], unique=True, name="uniq_dataset_hash")
+        self._db.datasets.create_index(
+            [("dataset_id", ASCENDING), ("hash", ASCENDING)],
+            unique=True,
+            name="uniq_dataset_hash",
+        )
 
         return self._db
 
@@ -69,7 +84,7 @@ class Database:
         if self._db is None:
             return self.connect()
         return self._db
-    
+
     def close(self):
         """Fechar a conexão"""
         if self._client:
@@ -77,10 +92,11 @@ class Database:
             self._client = None
             self._db = None
 
+
 # Instância global do banco
 db_instance = Database()
+
 
 def get_db():
     """Função para obter a instância do banco"""
     return db_instance.db
-
