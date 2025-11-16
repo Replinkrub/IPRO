@@ -2,6 +2,8 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
+fastapi import APIRouter, Depends, HTTPException
+
 import numpy as np
 import pandas as pd
 
