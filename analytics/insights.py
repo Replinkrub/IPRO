@@ -1,7 +1,6 @@
 """Geração de insights R.I.C.O. com enriquecimento estatístico."""
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Dict, Iterable, List
 
 import numpy as np
@@ -16,13 +15,14 @@ from analytics.estatistica import (
 )
 from analytics.segmentador_pdv import SegmentadorPDV
 from services.models import Alert
+from core.utils import utc_now
 
 
 class InsightsGenerator:
     """Gerar alertas padronizados do framework R.I.C.O."""
 
     def __init__(self, delay_logistico: int = 20):
-        self.reference_date = datetime.utcnow()
+        self.reference_date = utc_now()
         self.delay_logistico = delay_logistico
         self.segmentador = SegmentadorPDV()
 
@@ -34,7 +34,7 @@ class InsightsGenerator:
         if df.empty:
             return []
 
-        df['date'] = pd.to_datetime(df['date'])
+        df['date'] = pd.to_datetime(df['date'], utc=True)
         df['qty'] = pd.to_numeric(df['qty'], errors='coerce').fillna(0)
         df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
 

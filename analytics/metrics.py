@@ -1,7 +1,7 @@
 """Motor de métricas canônicas do IPRO."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import timedelta
 from decimal import Decimal
 from typing import Dict, Iterable, List
 
@@ -9,11 +9,12 @@ import numpy as np
 import pandas as pd
 
 from services.models import CustomerAnalytics, ProductAnalytics
+from core.utils import utc_now
 
 
 class MetricsCalculator:
     def __init__(self, delay_logistico: int = 20):
-        self.reference_date = datetime.utcnow()
+        self.reference_date = utc_now()
         self.delay_logistico = delay_logistico
 
     # ------------------------------------------------------------------
@@ -24,7 +25,7 @@ class MetricsCalculator:
         if df.empty:
             return []
 
-        df['date'] = pd.to_datetime(df['date'])
+        df['date'] = pd.to_datetime(df['date'], utc=True)
         df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
 
         resultados: List[Dict] = []
@@ -87,7 +88,7 @@ class MetricsCalculator:
         if df.empty:
             return []
 
-        df['date'] = pd.to_datetime(df['date'])
+        df['date'] = pd.to_datetime(df['date'], utc=True)
         df['qty'] = pd.to_numeric(df['qty'], errors='coerce').fillna(0)
         df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
 
@@ -155,7 +156,7 @@ class MetricsCalculator:
                 'ruptura_projetada_media': 0.0,
             }
 
-        df['date'] = pd.to_datetime(df['date'])
+        df['date'] = pd.to_datetime(df['date'], utc=True)
         df['subtotal'] = pd.to_numeric(df['subtotal'], errors='coerce').fillna(0.0)
 
         total_revenue = float(df['subtotal'].sum())
