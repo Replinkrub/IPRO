@@ -97,6 +97,10 @@ class MetricsCalculator:
         revenue_per_sku = df.groupby('sku')['subtotal'].sum()
         hero_threshold = revenue_per_sku.quantile(0.8) if not revenue_per_sku.empty else 0.0
 
+        df = df.copy()
+        if pd.api.types.is_datetime64tz_dtype(df['date']):
+            df['date'] = df['date'].dt.tz_localize(None)
+
         mensal = df.groupby(['sku', df['date'].dt.to_period('M')])['subtotal'].sum()
 
         resultados: List[ProductAnalytics] = []
