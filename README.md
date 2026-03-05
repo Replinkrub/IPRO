@@ -1,98 +1,174 @@
-# IPRO — Inteligência de Pedidos PRO (MVP Técnico)
 
-Este repositório contém o MVP técnico do **IPRO**, um pipeline + API para:
-- receber planilhas Excel (`.xlsx`) de pedidos/vendas,
-- **extrair e normalizar** colunas (mesmo quando variam de nome),
-- salvar datasets em **MongoDB**,
-- gerar **métricas (RFM / Mix / KPIs)**,
-- e **exportar relatórios em Excel**.
+# IPRO — Inteligência de Pedidos
 
-> Status: **em desenvolvimento**. Existem rotas e módulos legados dentro do repo. Este README descreve **o que está no código hoje** e lista as pendências reais para produção.
+Motor analítico para detecção de eventos comerciais em dados de vendas B2B.
 
 ---
 
-## O que existe no código (de verdade)
+# PROJECT STATUS
 
-### Backend (FastAPI)
-- `main.py` — aplicação FastAPI
-- `routers/` — endpoints `/api/...`
-  - `dataset_router.py` — upload/processamento/summary
-  - `alerts_router.py` — alertas R.I.C.O
-  - `export_router.py` — export de Excel (atualmente legado)
-  - `analytics_router.py` — **WIP** (há inconsistências/duplicidades)
+Current Version: v7  
+Status: development paused  
+Last update: 2025-01  
 
-### Pipeline / Serviços
-- `services/extractor.py` — leitura e extração de `.xlsx`
-- `services/schema_aliases.py` — aliases de nomes de colunas
-- `ipro/pipeline/normalize.py` — **normalização canônica** (colunas padrão)
-- `analytics/metrics.py` — métricas (RFM, KPIs, produto)
-- `services/report_builder.py` — **gera Excel padrão V2 (5 abas)**
+Este repositório contém **o motor analítico do IPRO**.
 
-### Frontend estático (painel simples)
-- `src/static/index.html` — UI simples para upload e consumo de rotas
-
-### Banco (MongoDB)
-- `docker-compose.yml` + `init-mongo.js` — cria usuário e coleções:
-  - `datasets`, `transactions`, `customers`, `analytics_customer`, `analytics_product`, `requests`
+Não contém interface final de produto ou sistema SaaS completo.
 
 ---
 
-## Rotas principais (as que fazem sentido como core)
+# PROJECT PURPOSE
 
-> Prefixo: `/api`
+O objetivo do IPRO é analisar histórico de pedidos e detectar eventos comerciais relevantes.
 
-### 1) Upload batch (grava no Mongo)
-`POST /api/upload-batch`
+Exemplos:
 
-- multipart/form-data com `files[]`
-- cria `dataset_id`
-- extrai dados e grava `transactions` e `customers`
+- risco de ruptura de compra
+- queda anormal de faturamento
+- comportamento de compra fora do padrão
 
-### 2) Processar um arquivo e devolver Excel (V2 - 5 abas)
-`POST /api/process`
-
-- recebe 1 arquivo `.xlsx`
-- devolve um `.xlsx` com 5 abas padrão:
-  1. Identificação do Cliente
-  2. Histórico Comercial
-  3. Inteligência de Mix
-  4. Relacional e Atendimento
-  5. Inteligência Comportamental
-
-### 3) Resumo do dataset
-`GET /api/dataset/{dataset_id}/summary`
-
-### 4) Alertas R.I.C.O
-`GET /api/alerts/rico/{dataset_id}`
-
-### 5) Export Excel do dataset
-`GET /api/export/{dataset_id}/excel`
-
-> Atenção: hoje este export usa um builder legado (`services/reports.py`) e não está alinhado ao padrão V2 de 5 abas.
-> Para produção, a recomendação é padronizar tudo no `services/report_builder.py`.
+O sistema gera **alertas estruturados para ação comercial**.
 
 ---
 
-## Variáveis de ambiente
+# NON GOALS
 
-Usadas no código:
+Este projeto **não é**:
 
-- `MONGO_URL` (default: mongodb://localhost:27017)
-- `DB_NAME` (default: ipro)
-- `APP_PORT` (default: 8000; também lê `PORT`)
-- `IPRO_API_KEY` (chave de API; existe suporte em `core/dependencies.py`, mas ainda não está aplicado nas rotas)
-- `JWT_SECRET` (referenciado no app, mas o módulo de auth ainda está em consolidação)
-- `ALLOWED_ORIGINS` (CORS; lista separada por vírgula)
-- `TIMEZONE` (default: America/Sao_Paulo)
-- `MAX_INSERT_BATCH` (default: 5000)
-- `CHUNK_ROWS` (default: 50000)
-- `PRODUCTION_ENV` (se "true", reduz verbosidade do logger)
+- sistema de ERP
+- sistema de CRM
+- sistema de BI / dashboard
+- sistema de gestão de estoque
 
-Exemplo mínimo (`.env`):
-```env
-MONGO_URL=mongodb://localhost:27017
-DB_NAME=ipro
-APP_PORT=8000
-IPRO_API_KEY=trocar_esta_chave
-TIMEZONE=America/Sao_Paulo
-ALLOWED_ORIGINS=http://localhost:5000
+Qualquer funcionalidade relacionada a essas áreas está **fora do escopo do IPRO**.
+
+---
+
+# CORE CONCEPT
+
+IPRO funciona como um **motor de detecção de eventos comerciais**.
+
+Fluxo simplificado:
+
+dataset de transações  
+↓  
+normalização de dados  
+↓  
+análise estatística  
+↓  
+detecção de eventos  
+↓  
+alertas comerciais
+
+---
+
+# ALERT MODEL
+
+Todos os eventos detectados seguem o mesmo modelo:
+
+Alert
+
+- dataset_id
+- client
+- sku
+- type
+- insight
+- diagnosis
+- recommended_action
+- reliability
+- suggested_deadline
+
+Este modelo é o núcleo do sistema.
+
+---
+
+# ANALYTICS FRAMEWORK
+
+O sistema utiliza o framework **R.I.C.O.**
+
+R → Ruptura  
+I → Instabilidade  
+C → Contração  
+O → Outlier  
+
+Cada evento detectado pertence a uma dessas categorias.
+
+---
+
+# PROJECT STRUCTURE
+
+IPRO
+├ analytics
+├ services
+├ routers
+├ core
+├ ipro
+├ src
+└ tests
+
+analytics → cálculo estatístico e geração de insights  
+services → ingestão, normalização e validação de dados  
+routers → endpoints da API  
+core → configuração do sistema  
+ipro/pipeline → processamento de datasets  
+
+---
+
+# DATA MODEL EXPECTED
+
+O motor analítico espera transações com os seguintes campos:
+
+client  
+sku  
+date  
+qty  
+subtotal  
+
+Qualquer dataset utilizado deve respeitar essa estrutura.
+
+---
+
+# IMPLEMENTED FEATURES
+
+✔ ingestão de datasets  
+✔ normalização de dados  
+✔ análise estatística  
+✔ geração de alertas  
+✔ segmentação de clientes  
+✔ exportação de relatórios  
+
+---
+
+# FUTURE FEATURES
+
+- motor de recomendação de pedido
+- priorização comercial de alertas
+- estimativa de oportunidade financeira
+- interface visual
+- versão SaaS multi-tenant
+
+---
+
+# TECHNOLOGY STACK
+
+Python  
+FastAPI  
+Pandas  
+NumPy  
+Docker  
+MongoDB  
+
+---
+
+# DESIGN PRINCIPLE
+
+O IPRO não gera dashboards.
+
+Ele gera **eventos comerciais acionáveis**.
+
+---
+
+# MAINTENANCE NOTE
+
+Este repositório representa uma versão experimental do motor analítico.
+Mudanças estruturais podem ocorrer nas próximas versões.
